@@ -2,15 +2,18 @@
 
 #include "rapidutf/rapidutf.hpp"
 
+
+
 #if defined(RAPIDUTF_USE_SSE_4_2)
-#include <nmmintrin.h> // SSE4.2 intrinsics
+#  include <nmmintrin.h>  // SSE4.2 intrinsics
 #elif defined(RAPIDUTF_USE_NEON)
-#include <arm_neon.h>
+#  include <arm_neon.h>
 #endif
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
-namespace rapidutf {
+namespace rapidutf
+{
 
 auto converter::is_valid_utf8_sequence(const unsigned char *bytes, int length) -> bool
 {
@@ -1029,99 +1032,43 @@ auto converter::utf32_to_utf8_sse42(const std::u32string &utf32) -> std::string
  */
 auto converter::utf8_to_utf16_neon(const std::string &utf8) -> std::u16string
 {
+  std::u16string utf16;
+  utf16.reserve(utf8.size());
+
   const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
   std::size_t length = utf8.length();
 
-  // Pre-allocate maximum possible size (each UTF-8 byte could become a UTF-16 character)
-  std::u16string utf16;
-  utf16.reserve(length);
-  char16_t *buffer = &utf16[0];  // Non-const pointer to the modifiable buffer
-
   for (std::size_t i = 0; i < length;)
   {
-    if (length - i >= 64)
+    if (length - i >= 16)
     {
-      // Prefetch next chunk
-      __builtin_prefetch(bytes + i + 64, 0, 0);
+      uint8x16_t chunk = vld1q_u8(bytes + i);
+      uint8x16_t mask = vdupq_n_u8(0x80);
+      uint8x16_t result = vceqq_u8(vandq_u8(chunk, mask), vdupq_n_u8(0));
+      uint64_t bitfield_lo = vgetq_lane_u64(vreinterpretq_u64_u8(result), 0);
+      uint64_t bitfield_hi = vgetq_lane_u64(vreinterpretq_u64_u8(result), 1);
+      uint64_t bitfield = bitfield_lo | (bitfield_hi << 8);
 
-      // Process 64 bytes in 4 chunks of 16 bytes
-      for (int j = 0; j < 4; ++j)
+      if (bitfield == 0xFFFFFFFFFFFFFFFF)
       {
-        uint8x16_t chunk = vld1q_u8(bytes + i + j * 16);
-        uint8x16_t mask = vdupq_n_u8(0x80);
-        uint8x16_t result = vceqq_u8(vandq_u8(chunk, mask), vdupq_n_u8(0));
-        uint64_t bitfield_lo = vgetq_lane_u64(vreinterpretq_u64_u8(result), 0);
-        uint64_t bitfield_hi = vgetq_lane_u64(vreinterpretq_u64_u8(result), 1);
-
-        if (bitfield_lo != 0xFFFFFFFFFFFFFFFF || bitfield_hi != 0xFFFFFFFFFFFFFFFF)
-        {
-          // Non-ASCII characters found, handle with NEON
-          std::size_t offset = i + j * 16;
-          std::size_t remaining = length - offset;
-          char16_t *out_ptr = buffer + utf16.size();
-
-          while (remaining > 0)
-          {
-            uint8x16_t chunk = vld1q_u8(bytes + offset);
-            uint16x8_t result_lo = vmovl_u8(vget_low_u8(chunk));
-            uint16x8_t result_hi = vmovl_u8(vget_high_u8(chunk));
-
-            uint8x16_t mask_lo = vceqq_u8(vdupq_n_u8(0x80), vget_low_u8(chunk));
-            uint8x16_t mask_hi = vceqq_u8(vdupq_n_u8(0x80), vget_high_u8(chunk));
-
-            result_lo = vbslq_u16(vmovl_u8(mask_lo), vld1q_u16(utf8_to_utf16_table + vget_low_u8(chunk)), result_lo);
-            result_hi = vbslq_u16(vmovl_u8(mask_hi), vld1q_u16(utf8_to_utf16_table + vget_high_u8(chunk)), result_hi);
-
-            vst1q_u16(reinterpret_cast<uint16_t *>(out_ptr), result_lo);
-            vst1q_u16(reinterpret_cast<uint16_t *>(out_ptr + 8), result_hi);
-
-            out_ptr += 16;
-            offset += 16;
-            remaining -= 16;
-          }
-
-          utf16.resize(utf16.size() + (length - i - j * 16));
-          return utf16;
-        }
-
-        // All characters in this chunk are ASCII
+        // All characters in the chunk are ASCII
         uint16x8_t chunk_lo = vmovl_u8(vget_low_u8(chunk));
         uint16x8_t chunk_hi = vmovl_u8(vget_high_u8(chunk));
-        char16_t *ptr = buffer + utf16.size();
-        vst1q_u16(reinterpret_cast<uint16_t *>(ptr), chunk_lo);
-        vst1q_u16(reinterpret_cast<uint16_t *>(ptr + 8), chunk_hi);
+        vst1q_u16(reinterpret_cast<uint16_t *>(&utf16[utf16.size()]), chunk_lo);
+        vst1q_u16(reinterpret_cast<uint16_t *>(&utf16[utf16.size() + 8]), chunk_hi);
         utf16.resize(utf16.size() + 16);
+        i += 16;
       }
-      i += 64;
+      else
+      {
+        // Handle non-ASCII characters
+        utf8_to_utf16_common(bytes + i, length - i, utf16);
+        break;
+      }
     }
     else
     {
-      // Handle remaining bytes
-      std::size_t offset = i;
-      std::size_t remaining = length - offset;
-      char16_t *out_ptr = buffer + utf16.size();
-
-      while (remaining > 0)
-      {
-        uint8x16_t chunk = vld1q_u8(bytes + offset);
-        uint16x8_t result_lo = vmovl_u8(vget_low_u8(chunk));
-        uint16x8_t result_hi = vmovl_u8(vget_high_u8(chunk));
-
-        uint8x16_t mask_lo = vceqq_u8(vdupq_n_u8(0x80), vget_low_u8(chunk));
-        uint8x16_t mask_hi = vceqq_u8(vdupq_n_u8(0x80), vget_high_u8(chunk));
-
-        result_lo = vbslq_u16(vmovl_u8(mask_lo), vld1q_u16(utf8_to_utf16_table + vget_low_u8(chunk)), result_lo);
-        result_hi = vbslq_u16(vmovl_u8(mask_hi), vld1q_u16(utf8_to_utf16_table + vget_high_u8(chunk)), result_hi);
-
-        vst1q_u16(reinterpret_cast<uint16_t *>(out_ptr), result_lo);
-        vst1q_u16(reinterpret_cast<uint16_t *>(out_ptr + 8), result_hi);
-
-        out_ptr += 16;
-        offset += 16;
-        remaining -= 16;
-      }
-
-      utf16.resize(utf16.size() + length - i);
+      utf8_to_utf16_common(bytes + i, length - i, utf16);
       break;
     }
   }
@@ -1782,223 +1729,199 @@ auto converter::utf32_to_utf8_fallback(const std::u32string &utf32) -> std::stri
 
 #endif
 
-    /* Wrappers for the conversion functions that select the appropriate implementation based on
-    platform capabilities */
+/* Wrappers for the conversion functions that select the appropriate implementation based on
+platform capabilities */
 
-    /**
-     * @brief Converts a UTF-8 encoded string to a UTF-16 encoded string.
-     *
-     * This function uses SIMD instructions if available, otherwise it falls back to a standard
-     * implementation.
-     * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
-     *
-     * @param utf8 The UTF-8 encoded string.
-     * @return std::u16string The UTF-16 encoded string.
-     * @throws soci_error if the input string contains invalid UTF-8 encoding.
-     */
-    std::u16string converter::utf8_to_utf16(const std::string &utf8)
-    {
+/**
+ * @brief Converts a UTF-8 encoded string to a UTF-16 encoded string.
+ *
+ * This function uses SIMD instructions if available, otherwise it falls back to a standard
+ * implementation.
+ * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
+ *
+ * @param utf8 The UTF-8 encoded string.
+ * @return std::u16string The UTF-16 encoded string.
+ * @throws soci_error if the input string contains invalid UTF-8 encoding.
+ */
+std::u16string converter::utf8_to_utf16(const std::string &utf8)
+{
 #if defined(SOCI_USE_AVX2)
-      return utf8_to_utf16_avx2(utf8);
+  return utf8_to_utf16_avx2(utf8);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
-      return utf8_to_utf16_sse42(utf8);
-#elif defined(RAPIDUTF_USE_NEON) // && (0)
-      return utf8_to_utf16_neon(utf8);
+  return utf8_to_utf16_sse42(utf8);
+#elif defined(RAPIDUTF_USE_NEON)  // && (0)
+  return utf8_to_utf16_neon(utf8);
 #else
-      return utf8_to_utf16_fallback(utf8);
+  return utf8_to_utf16_fallback(utf8);
 #endif
-    }
+}
 
-    /**
-     * @brief Converts a UTF-16 encoded string to a UTF-8 encoded string.
-     *
-     * This function uses SIMD instructions if available, otherwise it falls back to a standard
-     * implementation.
-     * If the input string contains invalid UTF-16 encoding, a soci_error exception is thrown.
-     *
-     * @param utf16 The UTF-16 encoded string.
-     * @return std::string The UTF-8 encoded string.
-     * @throws soci_error if the input string contains invalid UTF-16 encoding.
-     */
-    std::string converter::utf16_to_utf8(const std::u16string &utf16)
-    {
+/**
+ * @brief Converts a UTF-16 encoded string to a UTF-8 encoded string.
+ *
+ * This function uses SIMD instructions if available, otherwise it falls back to a standard
+ * implementation.
+ * If the input string contains invalid UTF-16 encoding, a soci_error exception is thrown.
+ *
+ * @param utf16 The UTF-16 encoded string.
+ * @return std::string The UTF-8 encoded string.
+ * @throws soci_error if the input string contains invalid UTF-16 encoding.
+ */
+std::string converter::utf16_to_utf8(const std::u16string &utf16)
+{
 #if defined(SOCI_USE_AVX2)
-      return utf16_to_utf8_avx2(utf16);
+  return utf16_to_utf8_avx2(utf16);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
-      return utf16_to_utf8_sse42(utf16);
-#elif defined(RAPIDUTF_USE_NEON) //&& (0)
-      return utf16_to_utf8_neon(utf16);
+  return utf16_to_utf8_sse42(utf16);
+#elif defined(RAPIDUTF_USE_NEON)  //&& (0)
+  return utf16_to_utf8_neon(utf16);
 #else
-      return utf16_to_utf8_fallback(utf16);
+  return utf16_to_utf8_fallback(utf16);
 #endif
-    }
+}
 
-    /**
-     * @brief Converts a UTF-16 encoded string to a UTF-32 encoded string.
-     *
-     * This function uses SIMD instructions if available, otherwise it falls back to a standard
-     * implementation.
-     * If the input string contains invalid UTF-16 encoding, a soci_error exception is thrown.
-     *
-     * @param utf16 The UTF-16 encoded string.
-     * @return std::u32string The UTF-32 encoded string.
-     * @throws soci_error if the input string contains invalid UTF-16 encoding.
-     */
-    std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
-    {
+/**
+ * @brief Converts a UTF-16 encoded string to a UTF-32 encoded string.
+ *
+ * This function uses SIMD instructions if available, otherwise it falls back to a standard
+ * implementation.
+ * If the input string contains invalid UTF-16 encoding, a soci_error exception is thrown.
+ *
+ * @param utf16 The UTF-16 encoded string.
+ * @return std::u32string The UTF-32 encoded string.
+ * @throws soci_error if the input string contains invalid UTF-16 encoding.
+ */
+std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
+{
 #if defined(SOCI_USE_AVX2)
-      return utf16_to_utf32_avx2(utf16);
+  return utf16_to_utf32_avx2(utf16);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
-      return utf16_to_utf32_sse42(utf16);
+  return utf16_to_utf32_sse42(utf16);
 #elif defined(RAPIDUTF_USE_NEON)
-      return utf16_to_utf32_neon(utf16);
+  return utf16_to_utf32_neon(utf16);
 #else
-      return utf16_to_utf32_fallback(utf16);
+  return utf16_to_utf32_fallback(utf16);
 #endif
-    }
+}
 
-    /**
-     * @brief Converts a UTF-32 encoded string to a UTF-16 encoded string.
-     *
-     * This function uses SIMD instructions if available, otherwise it falls back to a standard
-     * implementation.
-     * If the input string contains invalid UTF-32 code points, a soci_error exception is thrown.
-     *
-     * @param utf32 The UTF-32 encoded string.
-     * @return std::u16string The UTF-16 encoded string.
-     * @throws soci_error if the input string contains invalid UTF-32 code points.
-     */
-    std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
-    {
+/**
+ * @brief Converts a UTF-32 encoded string to a UTF-16 encoded string.
+ *
+ * This function uses SIMD instructions if available, otherwise it falls back to a standard
+ * implementation.
+ * If the input string contains invalid UTF-32 code points, a soci_error exception is thrown.
+ *
+ * @param utf32 The UTF-32 encoded string.
+ * @return std::u16string The UTF-16 encoded string.
+ * @throws soci_error if the input string contains invalid UTF-32 code points.
+ */
+std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
+{
 #if defined(SOCI_USE_AVX2)
-      return utf32_to_utf16_avx2(utf32);
+  return utf32_to_utf16_avx2(utf32);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
-      return utf32_to_utf16_sse42(utf32);
+  return utf32_to_utf16_sse42(utf32);
 #elif defined(RAPIDUTF_USE_NEON)
-      return utf32_to_utf16_neon(utf32);
+  return utf32_to_utf16_neon(utf32);
 #else
-      return utf32_to_utf16_fallback(utf32);
+  return utf32_to_utf16_fallback(utf32);
 #endif
-    }
+}
 
-    /**
-     * @brief Converts a UTF-8 encoded string to a UTF-32 encoded string.
-     *
-     * This function uses SIMD instructions if available, otherwise it falls back to a standard
-     * implementation.
-     * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
-     *
-     * @param utf8 The UTF-8 encoded string.
-     * @return std::u32string The UTF-32 encoded string.
-     * @throws soci_error if the input string contains invalid UTF-8 encoding.
-     */
-    std::u32string converter::utf8_to_utf32(const std::string &utf8)
-    {
+/**
+ * @brief Converts a UTF-8 encoded string to a UTF-32 encoded string.
+ *
+ * This function uses SIMD instructions if available, otherwise it falls back to a standard
+ * implementation.
+ * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
+ *
+ * @param utf8 The UTF-8 encoded string.
+ * @return std::u32string The UTF-32 encoded string.
+ * @throws soci_error if the input string contains invalid UTF-8 encoding.
+ */
+std::u32string converter::utf8_to_utf32(const std::string &utf8)
+{
 #if defined(SOCI_USE_AVX2)
-      return utf8_to_utf32_avx2(utf8);
+  return utf8_to_utf32_avx2(utf8);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
-      return utf8_to_utf32_sse42(utf8);
+  return utf8_to_utf32_sse42(utf8);
 #elif defined(RAPIDUTF_USE_NEON)
-      return utf8_to_utf32_neon(utf8);
+  return utf8_to_utf32_neon(utf8);
 #else
-      return utf8_to_utf32_fallback(utf8);
+  return utf8_to_utf32_fallback(utf8);
 #endif
-    }
+}
 
-    /**
-     * @brief Converts a UTF-32 encoded string to a UTF-8 encoded string.
-     *
-     * This function uses SIMD instructions if available, otherwise it falls back to a standard
-     * implementation.
-     * If the input string contains invalid UTF-32 code points, a soci_error exception is thrown.
-     *
-     * @param utf32 The UTF-32 encoded string.
-     * @return std::string The UTF-8 encoded string.
-     * @throws soci_error if the input string contains invalid UTF-32 code points.
-     */
-    std::string converter::utf32_to_utf8(const std::u32string &utf32)
-    {
+/**
+ * @brief Converts a UTF-32 encoded string to a UTF-8 encoded string.
+ *
+ * This function uses SIMD instructions if available, otherwise it falls back to a standard
+ * implementation.
+ * If the input string contains invalid UTF-32 code points, a soci_error exception is thrown.
+ *
+ * @param utf32 The UTF-32 encoded string.
+ * @return std::string The UTF-8 encoded string.
+ * @throws soci_error if the input string contains invalid UTF-32 code points.
+ */
+std::string converter::utf32_to_utf8(const std::u32string &utf32)
+{
 #if defined(SOCI_USE_AVX2)
-      return utf32_to_utf8_avx2(utf32);
+  return utf32_to_utf8_avx2(utf32);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
-      return utf32_to_utf8_sse42(utf32);
+  return utf32_to_utf8_sse42(utf32);
 #elif defined(RAPIDUTF_USE_NEON)
-      return utf32_to_utf8_neon(utf32);
+  return utf32_to_utf8_neon(utf32);
 #else
-      return utf32_to_utf8_fallback(utf32);
+  return utf32_to_utf8_fallback(utf32);
 #endif
-    }
+}
 
-    /**
-     * @brief Converts a UTF-8 encoded string to a wide string (wstring).
-     *
-     * This function uses the platform's native wide character encoding. On Windows, this is UTF-16,
-     * while on Unix/Linux and other platforms, it is UTF-32 or UTF-8 depending on the system
-     * configuration.
-     * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
-     *
-     * @param utf8 The UTF-8 encoded string.
-     * @return std::wstring The wide string.
-     */
-    std::wstring converter::utf8_to_wide(const std::string &utf8)
-    {
-#if defined(SOCI_WCHAR_T_IS_WIDE) // Windows
-      // Convert UTF-8 to UTF-32 first and then to wstring (UTF-32 on Unix/Linux)
-      std::u32string utf32 = utf8_to_utf32(utf8);
-      return std::wstring(utf32.begin(), utf32.end());
+/**
+ * @brief Converts a UTF-8 encoded string to a wide string (wstring).
+ *
+ * This function uses the platform's native wide character encoding. On Windows, this is UTF-16,
+ * while on Unix/Linux and other platforms, it is UTF-32 or UTF-8 depending on the system
+ * configuration.
+ * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
+ *
+ * @param utf8 The UTF-8 encoded string.
+ * @return std::wstring The wide string.
+ */
+std::wstring converter::utf8_to_wide(const std::string &utf8)
+{
+#if defined(SOCI_WCHAR_T_IS_WIDE)  // Windows
+  // Convert UTF-8 to UTF-32 first and then to wstring (UTF-32 on Unix/Linux)
+  std::u32string utf32 = utf8_to_utf32(utf8);
+  return std::wstring(utf32.begin(), utf32.end());
 #else  // Unix/Linux and others
-      std::u16string utf16 = utf8_to_utf16(utf8);
-      return std::wstring(utf16.begin(), utf16.end());
-#endif // SOCI_WCHAR_T_IS_WIDE
-    }
+  std::u16string utf16 = utf8_to_utf16(utf8);
+  return std::wstring(utf16.begin(), utf16.end());
+#endif  // SOCI_WCHAR_T_IS_WIDE
+}
 
-    /**
-     * @brief Converts a wide string (wstring) to a UTF-8 encoded string.
-     *
-     * This function uses the platform's native wide character encoding. On Windows, this is UTF-16,
-     * while on Unix/Linux and other platforms, it is UTF-32 or UTF-8 depending on the system
-     * configuration.
-     * If the input string contains invalid wide characters, a soci_error exception is thrown.
-     *
-     * @param wide The wide string.
-     * @return std::string The UTF-8 encoded string.
-     */
-    std::string converter::wide_to_utf8(const std::wstring &wide)
-    {
-#if defined(SOCI_WCHAR_T_IS_WIDE) // Windows
-      // Convert wstring (UTF-32) to utf8
-      std::u32string utf32(wide.begin(), wide.end());
-      return utf32_to_utf8(utf32);
+/**
+ * @brief Converts a wide string (wstring) to a UTF-8 encoded string.
+ *
+ * This function uses the platform's native wide character encoding. On Windows, this is UTF-16,
+ * while on Unix/Linux and other platforms, it is UTF-32 or UTF-8 depending on the system
+ * configuration.
+ * If the input string contains invalid wide characters, a soci_error exception is thrown.
+ *
+ * @param wide The wide string.
+ * @return std::string The UTF-8 encoded string.
+ */
+std::string converter::wide_to_utf8(const std::wstring &wide)
+{
+#if defined(SOCI_WCHAR_T_IS_WIDE)  // Windows
+  // Convert wstring (UTF-32) to utf8
+  std::u32string utf32(wide.begin(), wide.end());
+  return utf32_to_utf8(utf32);
 #else  // Unix/Linux and others
-      std::u16string utf16(wide.begin(), wide.end());
-      return utf16_to_utf8(utf16);
-#endif // SOCI_WCHAR_T_IS_WIDE
-    }
-
-
-#if defined(SOCI_USE_AVX2)
-std::u16string converter::utf8_to_utf16_avx2(const std::string &utf8)
-{
-  // Implementation from rapidutf.hpp
+  std::u16string utf16(wide.begin(), wide.end());
+  return utf16_to_utf8(utf16);
+#endif  // SOCI_WCHAR_T_IS_WIDE
 }
 
-// Implementations for other AVX2 methods
-#elif defined(RAPIDUTF_USE_SSE_4_2)
-std::u16string converter::utf8_to_utf16_sse42(const std::string &utf8)
-{
-  // Implementation from rapidutf.hpp
-}
-
-// Implementations for other SSE4.2 methods
-#elif defined(RAPIDUTF_USE_NEON)
-std::u16string converter::utf8_to_utf16_neon(const std::string &utf8)
-{
-  // Implementation from rapidutf.hpp
-}
-
-// Implementations for other NEON methods
-#endif
-
-} // namespace rapidutf
+}  // namespace rapidutf
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,cppcoreguidelines-pro-bounds-pointer-arithmetic)

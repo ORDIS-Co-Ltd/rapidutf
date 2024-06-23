@@ -7,11 +7,12 @@
 
 #include <wchar.h>
 
-// #define RAPIDUTF_USE_NEON
-
 #if WCHAR_MAX > 0xFFFFu
 #  define SOCI_WCHAR_T_IS_WIDE
 #endif
+
+
+#undef RAPIDUTF_USE_NEON
 
 namespace rapidutf
 {

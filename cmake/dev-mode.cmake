@@ -5,6 +5,11 @@ if(BUILD_TESTING)
   add_subdirectory(test)
 endif()
 
+set(BUILD_BENCHMARK ON)
+if(BUILD_BENCHMARK)
+  add_subdirectory(benchmark)
+endif()
+
 option(BUILD_MCSS_DOCS "Build documentation using Doxygen and m.css" OFF)
 if(BUILD_MCSS_DOCS)
   include(cmake/docs.cmake)
