@@ -393,9 +393,6 @@ void converter::utf32_to_utf8_common(const char32_t *chars, std::size_t length, 
 
 #if defined(RAPIDUTF_USE_AVX2)
 
-#include <immintrin.h>
-#include <string>
-
 auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
 {
   std::u16string utf16;
@@ -413,7 +410,7 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
       __m256i result = _mm256_cmpeq_epi8(_mm256_and_si256(chunk, mask), _mm256_setzero_si256());
       int bitfield = _mm256_movemask_epi8(result);
 
-      if (bitfield == 0xFFFFFFFF)
+      if (bitfield == static_cast<int>(0xFFFFFFFF))
       {
         // All characters in the chunk are ASCII
         __m128i ascii_chunk1 = _mm256_castsi256_si128(chunk);
@@ -425,10 +422,10 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
         ascii_chunk1 = _mm_or_si128(ascii_chunk1, ascii_chunk1_hi);
         ascii_chunk2 = _mm_or_si128(ascii_chunk2, ascii_chunk2_hi);
 
-        _mm_storeu_si128(reinterpret_cast<__m128i *>(&utf16[utf16.size()]), ascii_chunk1);
-        _mm_storeu_si128(reinterpret_cast<__m128i *>(&utf16[utf16.size() + 8]), ascii_chunk2);
-
         utf16.resize(utf16.size() + 16);
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(&utf16[utf16.size() - 16]), ascii_chunk1);
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(&utf16[utf16.size() - 8]), ascii_chunk2);
+
         i += 32;
       }
       else
@@ -448,7 +445,6 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
   return utf16;
 }
 
-
 auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 {
   std::string utf8;
@@ -466,10 +462,10 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
       __m256i result = _mm256_cmpeq_epi16(_mm256_and_si256(chunk, mask), chunk);
       int bitfield = _mm256_movemask_epi8(result);
 
-      if (bitfield == 0xFFFFFFFF)
+      if (bitfield == static_cast<int>(0xFFFFFFFF))
       {
         // All characters in the chunk are ASCII
-        for (int j = 0; j < 16; ++j)
+        for (std::size_t j = 0; j < 16; ++j)
         {
           utf8.push_back(static_cast<char>(chars[i + j]));
         }
@@ -512,12 +508,12 @@ auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32stri
       __m256i highSurrogate = _mm256_and_si256(chunk, highSurrogateMask);
       __m256i isSurrogate = _mm256_cmpeq_epi16(highSurrogate, highSurrogateStart);
 
-      uint32_t bitfield = _mm256_movemask_epi8(isSurrogate);
+      int bitfield = _mm256_movemask_epi8(isSurrogate);
 
       if (bitfield == 0)
       {
         // No surrogates in the chunk, so we can directly convert the UTF-16 characters to UTF-32
-        for (int j = 0; j < 16; ++j)
+        for (std::size_t j = 0; j < 16; ++j)
         {
           utf32.push_back(static_cast<char32_t>(chars[i + j]));
         }
@@ -560,7 +556,7 @@ auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16stri
       if (bitfield == 0)
       {
         // All characters in the chunk are BMP characters
-        for (int j = 0; j < 8; ++j)
+        for (std::size_t j = 0; j < 8; ++j)
         {
           utf16.push_back(static_cast<char16_t>(chars[i + j]));
         }
@@ -602,10 +598,10 @@ auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
       __m256i result = _mm256_cmpeq_epi8(_mm256_and_si256(chunk, mask), _mm256_setzero_si256());
       int bitfield = _mm256_movemask_epi8(result);
 
-      if (bitfield == 0xFFFFFFFF)
+      if (bitfield == static_cast<int>(0xFFFFFFFF))
       {
         // All characters in the chunk are ASCII
-        for (int j = 0; j < 32; ++j)
+        for (std::size_t j = 0; j < 32; ++j)
         {
           utf32.push_back(static_cast<char32_t>(bytes[i + j]));
         }
@@ -652,10 +648,10 @@ auto converter::utf32_to_utf8_avx2(const std::u32string &utf32) -> std::string
       __m256i result = _mm256_cmpeq_epi32(_mm256_and_si256(chunk, mask), chunk);
       int bitfield = _mm256_movemask_ps(_mm256_castsi256_ps(result));
 
-      if (bitfield == 0xFFFFFFFF)
+      if (bitfield == static_cast<int>(0xFFFFFFFF))
       {
         // All characters in the chunk are ASCII
-        for (int j = 0; j < 8; ++j)
+        for (std::size_t j = 0; j < 8; ++j)
         {
           utf8.push_back(static_cast<char>(chars[i + j]));
         }
