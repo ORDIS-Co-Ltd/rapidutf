@@ -8,10 +8,11 @@
 #include <arm_neon.h>
 #endif
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,cppcoreguidelines-pro-bounds-pointer-arithmetic)
 
 namespace rapidutf {
 
-bool Converter::is_valid_utf8_sequence(const unsigned char *bytes, int length)
+auto converter::is_valid_utf8_sequence(const unsigned char *bytes, int length) -> bool
 {
   if (length == 1)
   {
@@ -32,9 +33,9 @@ bool Converter::is_valid_utf8_sequence(const unsigned char *bytes, int length)
   return false;
 }
 
-bool Converter::is_valid_utf8(const std::string &utf8)
+auto converter::is_valid_utf8(const std::string &utf8) -> bool
 {
-  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
+  const auto *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
   std::size_t length = utf8.length();
 
   for (std::size_t i = 0; i < length;)
@@ -74,7 +75,7 @@ bool Converter::is_valid_utf8(const std::string &utf8)
   return true;
 }
 
-bool Converter::is_valid_utf16(const std::u16string &utf16)
+auto converter::is_valid_utf16(const std::u16string &utf16) -> bool
 {
   const char16_t *chars = utf16.data();
   std::size_t length = utf16.length();
@@ -99,7 +100,7 @@ bool Converter::is_valid_utf16(const std::u16string &utf16)
   return true;
 }
 
-bool Converter::is_valid_utf32(const std::u32string &utf32)
+auto converter::is_valid_utf32(const std::u32string &utf32) -> bool
 {
   const char32_t *chars = utf32.data();
   std::size_t length = utf32.length();
@@ -124,7 +125,7 @@ bool Converter::is_valid_utf32(const std::u32string &utf32)
   return true;
 }
 
-void Converter::utf8_to_utf16_common(const unsigned char *bytes, std::size_t length, std::u16string &utf16)
+void converter::utf8_to_utf16_common(const unsigned char *bytes, std::size_t length, std::u16string &utf16)
 {
   for (std::size_t i = 0; i < length;)
   {
@@ -179,7 +180,7 @@ void Converter::utf8_to_utf16_common(const unsigned char *bytes, std::size_t len
   }
 }
 
-void Converter::utf16_to_utf8_common(const char16_t *chars, std::size_t length, std::string &utf8)
+void converter::utf16_to_utf8_common(const char16_t *chars, std::size_t length, std::string &utf8)
 {
   for (std::size_t i = 0; i < length; ++i)
   {
@@ -228,7 +229,7 @@ void Converter::utf16_to_utf8_common(const char16_t *chars, std::size_t length, 
   }
 }
 
-void Converter::utf16_to_utf32_common(const char16_t *chars, std::size_t length, std::u32string &utf32)
+void converter::utf16_to_utf32_common(const char16_t *chars, std::size_t length, std::u32string &utf32)
 {
   for (std::size_t i = 0; i < length; ++i)
   {
@@ -261,7 +262,7 @@ void Converter::utf16_to_utf32_common(const char16_t *chars, std::size_t length,
   }
 }
 
-void Converter::utf32_to_utf16_common(const char32_t *chars, std::size_t length, std::u16string &utf16)
+void converter::utf32_to_utf16_common(const char32_t *chars, std::size_t length, std::u16string &utf16)
 {
   for (std::size_t i = 0; i < length; ++i)
   {
@@ -287,7 +288,7 @@ void Converter::utf32_to_utf16_common(const char32_t *chars, std::size_t length,
   }
 }
 
-void Converter::utf8_to_utf32_common(const unsigned char *bytes, std::size_t length, std::u32string &utf32)
+void converter::utf8_to_utf32_common(const unsigned char *bytes, std::size_t length, std::u32string &utf32)
 {
   for (std::size_t i = 0; i < length;)
   {
@@ -348,7 +349,7 @@ void Converter::utf8_to_utf32_common(const unsigned char *bytes, std::size_t len
   }
 }
 
-void Converter::utf32_to_utf8_common(const char32_t *chars, std::size_t length, std::string &utf8)
+void converter::utf32_to_utf8_common(const char32_t *chars, std::size_t length, std::string &utf8)
 {
   for (std::size_t i = 0; i < length; ++i)
   {
@@ -389,7 +390,7 @@ void Converter::utf32_to_utf8_common(const char32_t *chars, std::size_t length, 
 
 #if defined(SOCI_USE_AVX2)
 
-inline std::u16string Converter::utf8_to_utf16_avx2(const std::string &utf8)
+auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
 {
   std::u16string utf16;
   utf16.reserve(utf8.size());
@@ -434,7 +435,7 @@ inline std::u16string Converter::utf8_to_utf16_avx2(const std::string &utf8)
   return utf16;
 }
 
-inline std::string Converter::utf16_to_utf8_avx2(const std::u16string &utf16)
+auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 {
   std::string utf8;
   utf8.reserve(utf16.size() * 3);
@@ -479,7 +480,7 @@ inline std::string Converter::utf16_to_utf8_avx2(const std::u16string &utf16)
   return utf8;
 }
 
-inline std::u32string Converter::utf16_to_utf32_avx2(const std::u16string &utf16)
+auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string
 {
   std::u32string utf32;
   utf32.reserve(utf16.size());
@@ -525,7 +526,7 @@ inline std::u32string Converter::utf16_to_utf32_avx2(const std::u16string &utf16
   return utf32;
 }
 
-inline std::u16string Converter::utf32_to_utf16_avx2(const std::u32string &utf32)
+auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16string
 {
   std::u16string utf16;
   utf16.reserve(utf32.size() * 2);  // Maximum possible size (all surrogate pairs)
@@ -570,7 +571,7 @@ inline std::u16string Converter::utf32_to_utf16_avx2(const std::u32string &utf32
   return utf16;
 }
 
-inline std::u32string Converter::utf8_to_utf32_avx2(const std::string &utf8)
+auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
 {
   std::u32string utf32;
   utf32.reserve(utf8.size());
@@ -615,7 +616,7 @@ inline std::u32string Converter::utf8_to_utf32_avx2(const std::string &utf8)
   return utf32;
 }
 
-inline std::string Converter::utf32_to_utf8_avx2(const std::u32string &utf32)
+auto converter::utf32_to_utf8_avx2(const std::u32string &utf32) -> std::string
 {
   if (!is_valid_utf32(utf32))
   {
@@ -679,7 +680,7 @@ inline std::string Converter::utf32_to_utf8_avx2(const std::u32string &utf32)
  * @return A std::u16string containing the equivalent UTF-16 encoded string.
  * @throws std::runtime_error If an invalid UTF-8 sequence is encountered in the input string.
  */
-inline std::u16string Converter::utf8_to_utf16_sse42(const std::string &utf8)
+auto converter::utf8_to_utf16_sse42(const std::string &utf8) -> std::u16string
 {
   std::u16string utf16;
   utf16.reserve(utf8.size());
@@ -737,7 +738,7 @@ inline std::u16string Converter::utf8_to_utf16_sse42(const std::string &utf8)
  * @return A UTF-8 encoded string.
  * @throws std::runtime_error If an invalid UTF-16 sequence is encountered.
  */
-inline std::string Converter::utf16_to_utf8_sse42(const std::u16string &utf16)
+auto converter::utf16_to_utf8_sse42(const std::u16string &utf16) -> std::string
 {
   std::string utf8;
   utf8.reserve(utf16.size() * 3);
@@ -795,7 +796,7 @@ inline std::string Converter::utf16_to_utf8_sse42(const std::u16string &utf16)
  * @return The output UTF-32 encoded string.
  * @throw std::runtime_error If the input string contains an invalid UTF-16 sequence.
  */
-inline std::u32string Converter::utf16_to_utf32_sse42(const std::u16string &utf16)
+auto converter::utf16_to_utf32_sse42(const std::u16string &utf16) -> std::u32string
 {
   std::u32string utf32;
   utf32.reserve(utf16.size());
@@ -851,7 +852,7 @@ inline std::u32string Converter::utf16_to_utf32_sse42(const std::u16string &utf1
  * @return The output UTF-16 encoded string.
  * @throw std::runtime_error If the input string contains an invalid UTF-32 code point.
  */
-inline std::u16string Converter::utf32_to_utf16_sse42(const std::u32string &utf32)
+auto converter::utf32_to_utf16_sse42(const std::u32string &utf32) -> std::u16string
 {
   std::u16string utf16;
   utf16.reserve(utf32.size() * 2);
@@ -907,7 +908,7 @@ inline std::u16string Converter::utf32_to_utf16_sse42(const std::u32string &utf3
  * @return The output UTF-32 encoded string.
  * @throw std::runtime_error If the input string contains an invalid UTF-8 sequence.
  */
-inline std::u32string Converter::utf8_to_utf32_sse42(const std::string &utf8)
+auto converter::utf8_to_utf32_sse42(const std::string &utf8) -> std::u32string
 {
   std::u32string utf32;
   utf32.reserve(utf8.size());
@@ -963,7 +964,7 @@ inline std::u32string Converter::utf8_to_utf32_sse42(const std::string &utf8)
  * @return The output UTF-8 encoded string.
  * @throw std::runtime_error If the input string contains an invalid UTF-32 code point.
  */
-inline std::string Converter::utf32_to_utf8_sse42(const std::u32string &utf32)
+auto converter::utf32_to_utf8_sse42(const std::u32string &utf32) -> std::string
 {
   if (!is_valid_utf32(utf32))
   {
@@ -1026,7 +1027,7 @@ inline std::string Converter::utf32_to_utf8_sse42(const std::u32string &utf32)
  * @return std::u16string The output UTF-16 encoded string.
  * @throws std::runtime_error If the input UTF-8 string is not well-formed.
  */
-inline std::u16string Converter::utf8_to_utf16_neon(const std::string &utf8)
+auto converter::utf8_to_utf16_neon(const std::string &utf8) -> std::u16string
 {
   const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
   std::size_t length = utf8.length();
@@ -1138,7 +1139,7 @@ inline std::u16string Converter::utf8_to_utf16_neon(const std::string &utf8)
  * @return std::string The UTF-8 encoded string.
  * @throw std::runtime_error If the input UTF-16 string is invalid.
  */
-inline std::string Converter::utf16_to_utf8_neon(const std::u16string &utf16)
+auto converter::utf16_to_utf8_neon(const std::u16string &utf16) -> std::string
 {
   std::string utf8;
   utf8.reserve(utf16.size() * 3);
@@ -1207,7 +1208,7 @@ inline std::string Converter::utf16_to_utf8_neon(const std::u16string &utf16)
  * @return std::u32string The converted UTF-32 encoded string.
  * @throws std::runtime_error If the input UTF-16 string is not valid.
  */
-inline std::u32string Converter::utf16_to_utf32_neon(const std::u16string &utf16)
+auto converter::utf16_to_utf32_neon(const std::u16string &utf16) -> std::u32string
 {
   std::u32string utf32;
   utf32.reserve(utf16.size());  // Reserve enough space initially
@@ -1268,7 +1269,7 @@ inline std::u32string Converter::utf16_to_utf32_neon(const std::u16string &utf16
  * @return The converted UTF-16 encoded string.
  * @throws std::runtime_error If the input UTF-32 string contains invalid code points.
  */
-inline std::u16string Converter::utf32_to_utf16_neon(const std::u32string &utf32)
+auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16string
 {
   std::u16string utf16;
   utf16.reserve(utf32.size() * 2);
@@ -1508,7 +1509,7 @@ inline std::u16string Converter::utf32_to_utf16_neon(const std::u32string &utf32
  * @return The converted UTF-32 encoded string.
  * @throws std::runtime_error If the input UTF-8 string is invalid or contains an invalid UTF-8 sequence.
  */
-inline std::u32string Converter::utf8_to_utf32_neon(const std::string &utf8)
+auto converter::utf8_to_utf32_neon(const std::string &utf8) -> std::u32string
 {
   std::u32string utf32;
   utf32.reserve(utf8.size());
@@ -1576,7 +1577,7 @@ inline std::u32string Converter::utf8_to_utf32_neon(const std::string &utf8)
  * @return std::string The output UTF-8 encoded string.
  * @throw std::runtime_error If the input UTF-32 string contains invalid code points.
  */
-inline std::string Converter::utf32_to_utf8_neon(const std::u32string &utf32)
+auto converter::utf32_to_utf8_neon(const std::u32string &utf32) -> std::string
 {
   if (!is_valid_utf32(utf32))
   {
@@ -1641,7 +1642,7 @@ inline std::string Converter::utf32_to_utf8_neon(const std::u32string &utf32)
  * @return std::u16string The UTF-16 encoded string.
  * @throws std::runtime_error if the input string contains invalid UTF-8 encoding.
  */
-inline std::u16string Converter::utf8_to_utf16_fallback(const std::string &utf8)
+auto converter::utf8_to_utf16_fallback(const std::string &utf8) -> std::u16string
 {
   std::u16string utf16;
   utf16.reserve(utf8.size());
@@ -1665,7 +1666,7 @@ inline std::u16string Converter::utf8_to_utf16_fallback(const std::string &utf8)
  * @return std::string The UTF-8 encoded string.
  * @throws std::runtime_error if the input string contains invalid UTF-16 encoding.
  */
-inline std::string Converter::utf16_to_utf8_fallback(const std::u16string &utf16)
+auto converter::utf16_to_utf8_fallback(const std::u16string &utf16) -> std::string
 {
   std::string utf8;
   utf8.reserve(utf16.size() * 3);
@@ -1689,7 +1690,7 @@ inline std::string Converter::utf16_to_utf8_fallback(const std::u16string &utf16
  * @return std::u32string The UTF-32 encoded string.
  * @throws std::runtime_error if the input string contains invalid UTF-16 encoding.
  */
-inline std::u32string Converter::utf16_to_utf32_fallback(const std::u16string &utf16)
+auto converter::utf16_to_utf32_fallback(const std::u16string &utf16) -> std::u32string
 {
   std::u32string utf32;
   utf32.reserve(utf16.size());
@@ -1713,7 +1714,7 @@ inline std::u32string Converter::utf16_to_utf32_fallback(const std::u16string &u
  * @return std::u16string The UTF-16 encoded string.
  * @throws std::runtime_error if the input string contains invalid UTF-32 code points.
  */
-inline std::u16string Converter::utf32_to_utf16_fallback(const std::u32string &utf32)
+auto converter::utf32_to_utf16_fallback(const std::u32string &utf32) -> std::u16string
 {
   std::u16string utf16;
   utf16.reserve(utf32.size() * 2);
@@ -1737,7 +1738,7 @@ inline std::u16string Converter::utf32_to_utf16_fallback(const std::u32string &u
  * @return std::u32string The UTF-32 encoded string.
  * @throws std::runtime_error if the input string contains invalid UTF-8 encoding.
  */
-inline std::u32string Converter::utf8_to_utf32_fallback(const std::string &utf8)
+auto converter::utf8_to_utf32_fallback(const std::string &utf8) -> std::u32string
 {
   std::u32string utf32;
   utf32.reserve(utf8.size());
@@ -1761,7 +1762,7 @@ inline std::u32string Converter::utf8_to_utf32_fallback(const std::string &utf8)
  * @return std::string The UTF-8 encoded string.
  * @throws std::runtime_error if the input string contains invalid UTF-32 code points.
  */
-inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32)
+auto converter::utf32_to_utf8_fallback(const std::u32string &utf32) -> std::string
 {
   if (!is_valid_utf32(utf32))
   {
@@ -1795,7 +1796,7 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
      * @return std::u16string The UTF-16 encoded string.
      * @throws soci_error if the input string contains invalid UTF-8 encoding.
      */
-    std::u16string Converter::utf8_to_utf16(const std::string &utf8)
+    std::u16string converter::utf8_to_utf16(const std::string &utf8)
     {
 #if defined(SOCI_USE_AVX2)
       return utf8_to_utf16_avx2(utf8);
@@ -1819,7 +1820,7 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
      * @return std::string The UTF-8 encoded string.
      * @throws soci_error if the input string contains invalid UTF-16 encoding.
      */
-    std::string Converter::utf16_to_utf8(const std::u16string &utf16)
+    std::string converter::utf16_to_utf8(const std::u16string &utf16)
     {
 #if defined(SOCI_USE_AVX2)
       return utf16_to_utf8_avx2(utf16);
@@ -1843,7 +1844,7 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
      * @return std::u32string The UTF-32 encoded string.
      * @throws soci_error if the input string contains invalid UTF-16 encoding.
      */
-    std::u32string Converter::utf16_to_utf32(const std::u16string &utf16)
+    std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
     {
 #if defined(SOCI_USE_AVX2)
       return utf16_to_utf32_avx2(utf16);
@@ -1867,7 +1868,7 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
      * @return std::u16string The UTF-16 encoded string.
      * @throws soci_error if the input string contains invalid UTF-32 code points.
      */
-    std::u16string Converter::utf32_to_utf16(const std::u32string &utf32)
+    std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
     {
 #if defined(SOCI_USE_AVX2)
       return utf32_to_utf16_avx2(utf32);
@@ -1891,7 +1892,7 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
      * @return std::u32string The UTF-32 encoded string.
      * @throws soci_error if the input string contains invalid UTF-8 encoding.
      */
-    std::u32string Converter::utf8_to_utf32(const std::string &utf8)
+    std::u32string converter::utf8_to_utf32(const std::string &utf8)
     {
 #if defined(SOCI_USE_AVX2)
       return utf8_to_utf32_avx2(utf8);
@@ -1915,7 +1916,7 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
      * @return std::string The UTF-8 encoded string.
      * @throws soci_error if the input string contains invalid UTF-32 code points.
      */
-    std::string Converter::utf32_to_utf8(const std::u32string &utf32)
+    std::string converter::utf32_to_utf8(const std::u32string &utf32)
     {
 #if defined(SOCI_USE_AVX2)
       return utf32_to_utf8_avx2(utf32);
@@ -1939,7 +1940,7 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
      * @param utf8 The UTF-8 encoded string.
      * @return std::wstring The wide string.
      */
-    std::wstring Converter::utf8_to_wide(const std::string &utf8)
+    std::wstring converter::utf8_to_wide(const std::string &utf8)
     {
 #if defined(SOCI_WCHAR_T_IS_WIDE) // Windows
       // Convert UTF-8 to UTF-32 first and then to wstring (UTF-32 on Unix/Linux)
@@ -1962,7 +1963,7 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
      * @param wide The wide string.
      * @return std::string The UTF-8 encoded string.
      */
-    std::string Converter::wide_to_utf8(const std::wstring &wide)
+    std::string converter::wide_to_utf8(const std::wstring &wide)
     {
 #if defined(SOCI_WCHAR_T_IS_WIDE) // Windows
       // Convert wstring (UTF-32) to utf8
@@ -1976,21 +1977,21 @@ inline std::string Converter::utf32_to_utf8_fallback(const std::u32string &utf32
 
 
 #if defined(SOCI_USE_AVX2)
-std::u16string Converter::utf8_to_utf16_avx2(const std::string &utf8)
+std::u16string converter::utf8_to_utf16_avx2(const std::string &utf8)
 {
   // Implementation from rapidutf.hpp
 }
 
 // Implementations for other AVX2 methods
 #elif defined(RAPIDUTF_USE_SSE_4_2)
-std::u16string Converter::utf8_to_utf16_sse42(const std::string &utf8)
+std::u16string converter::utf8_to_utf16_sse42(const std::string &utf8)
 {
   // Implementation from rapidutf.hpp
 }
 
 // Implementations for other SSE4.2 methods
 #elif defined(RAPIDUTF_USE_NEON)
-std::u16string Converter::utf8_to_utf16_neon(const std::string &utf8)
+std::u16string converter::utf8_to_utf16_neon(const std::string &utf8)
 {
   // Implementation from rapidutf.hpp
 }
@@ -1999,3 +2000,5 @@ std::u16string Converter::utf8_to_utf16_neon(const std::string &utf8)
 #endif
 
 } // namespace rapidutf
+
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers,cppcoreguidelines-pro-bounds-pointer-arithmetic)
