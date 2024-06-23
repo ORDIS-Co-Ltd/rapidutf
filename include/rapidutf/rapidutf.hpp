@@ -43,7 +43,7 @@ private:
   static auto utf8_to_utf32_common(const unsigned char *bytes, std::size_t length, std::u32string &utf32) -> void;
   static auto utf32_to_utf8_common(const char32_t *chars, std::size_t length, std::string &utf8) -> void;
 
-#if defined(SOCI_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
   static auto utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string;
   static auto utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string;
   static auto utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string;

@@ -21,23 +21,43 @@ add_library(
 )
 add_library(rapidutf::rapidutf ALIAS rapidutf_rapidutf)
 
+######################################################################
+# Check cpu for capabilities
+######################################################################
+
+include(CheckCXXCompilerFlag)
+
 # Check for ARM64 architecture
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
     target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_NEON)
-endif()
-
+    message(STATUS "RapidUTF: Using NEON instructions for ARM64")
 # Check for x64 architecture
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|x64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|x64")
     if(MSVC)
-        target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_SSE_4_2)
+        # AVX2 and SSE 4.2 are enabled by default in MSVC for x64
+        target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_AVX2)
+        message(STATUS "RapidUTF: Using AVX2 instructions (MSVC x64)")
     else()
-        include(CheckCXXCompilerFlag)
-        check_cxx_compiler_flag("-msse4.2" COMPILER_SUPPORTS_SSE4_2)
-        if(COMPILER_SUPPORTS_SSE4_2)
-            target_compile_options(rapidutf_rapidutf PRIVATE -msse4.2)
-            target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_SSE_4_2)
+        # Check for AVX2
+        check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+        if(COMPILER_SUPPORTS_AVX2)
+            target_compile_options(rapidutf_rapidutf PRIVATE -mavx2)
+            target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_AVX2)
+            message(STATUS "RapidUTF: Using AVX2 instructions")
+        else()
+            # If no AVX2, check for SSE4.2
+            check_cxx_compiler_flag("-msse4.2" COMPILER_SUPPORTS_SSE4_2)
+            if(COMPILER_SUPPORTS_SSE4_2)
+                target_compile_options(rapidutf_rapidutf PRIVATE -msse4.2)
+                target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_SSE_4_2)
+                message(STATUS "RapidUTF: Using SSE 4.2 instructions")
+            else()
+                message(STATUS "RapidUTF: No SIMD instructions used (x64 without AVX2 or SSE4.2 support)")
+            endif()
         endif()
     endif()
+else()
+    message(STATUS "RapidUTF: No SIMD instructions used (not ARM64 or x64)")
 endif()
 
 include(GenerateExportHeader)

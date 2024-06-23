@@ -2,10 +2,10 @@
 
 #include "rapidutf/rapidutf.hpp"
 
-
-
 #if defined(RAPIDUTF_USE_SSE_4_2)
 #  include <nmmintrin.h>  // SSE4.2 intrinsics
+#elif defined(RAPIDUTF_USE_AVX2)
+#  include <immintrin.h>  // SSE4.2 intrinsics
 #elif defined(RAPIDUTF_USE_NEON)
 #  include <arm_neon.h>
 #endif
@@ -391,7 +391,10 @@ void converter::utf32_to_utf8_common(const char32_t *chars, std::size_t length, 
   }
 }
 
-#if defined(SOCI_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
+
+#include <immintrin.h>
+#include <string>
 
 auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
 {
@@ -413,17 +416,24 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
       if (bitfield == 0xFFFFFFFF)
       {
         // All characters in the chunk are ASCII
-        for (int j = 0; j < 32; ++j)
-        {
-          utf16.push_back(static_cast<char16_t>(bytes[i + j]));
-        }
+        __m128i ascii_chunk1 = _mm256_castsi256_si128(chunk);
+        __m128i ascii_chunk2 = _mm256_extracti128_si256(chunk, 1);
+
+        __m128i ascii_chunk1_hi = _mm_slli_epi16(ascii_chunk1, 8);
+        __m128i ascii_chunk2_hi = _mm_slli_epi16(ascii_chunk2, 8);
+
+        ascii_chunk1 = _mm_or_si128(ascii_chunk1, ascii_chunk1_hi);
+        ascii_chunk2 = _mm_or_si128(ascii_chunk2, ascii_chunk2_hi);
+
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(&utf16[utf16.size()]), ascii_chunk1);
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(&utf16[utf16.size() + 8]), ascii_chunk2);
+
+        utf16.resize(utf16.size() + 16);
         i += 32;
       }
       else
       {
         // Handle non-ASCII characters with AVX2
-        // ... (AVX2 specific code)
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
         utf8_to_utf16_common(bytes + i, length - i, utf16);
         break;
       }
@@ -437,6 +447,7 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
 
   return utf16;
 }
+
 
 auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 {
@@ -1745,7 +1756,7 @@ platform capabilities */
  */
 std::u16string converter::utf8_to_utf16(const std::string &utf8)
 {
-#if defined(SOCI_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
   return utf8_to_utf16_avx2(utf8);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
   return utf8_to_utf16_sse42(utf8);
@@ -1769,7 +1780,7 @@ std::u16string converter::utf8_to_utf16(const std::string &utf8)
  */
 std::string converter::utf16_to_utf8(const std::u16string &utf16)
 {
-#if defined(SOCI_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
   return utf16_to_utf8_avx2(utf16);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
   return utf16_to_utf8_sse42(utf16);
@@ -1793,7 +1804,7 @@ std::string converter::utf16_to_utf8(const std::u16string &utf16)
  */
 std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
 {
-#if defined(SOCI_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
   return utf16_to_utf32_avx2(utf16);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
   return utf16_to_utf32_sse42(utf16);
@@ -1817,7 +1828,7 @@ std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
  */
 std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
 {
-#if defined(SOCI_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
   return utf32_to_utf16_avx2(utf32);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
   return utf32_to_utf16_sse42(utf32);
@@ -1841,7 +1852,7 @@ std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
  */
 std::u32string converter::utf8_to_utf32(const std::string &utf8)
 {
-#if defined(SOCI_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
   return utf8_to_utf32_avx2(utf8);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
   return utf8_to_utf32_sse42(utf8);
@@ -1865,7 +1876,7 @@ std::u32string converter::utf8_to_utf32(const std::string &utf8)
  */
 std::string converter::utf32_to_utf8(const std::u32string &utf32)
 {
-#if defined(SOCI_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
   return utf32_to_utf8_avx2(utf32);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
   return utf32_to_utf8_sse42(utf32);
