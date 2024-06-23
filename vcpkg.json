@@ -17,6 +17,15 @@
           "version>=": "3.3.1"
         }
       ]
+    },
+    "benchmark": {
+      "description": "Dependencies for benchmarking",
+      "dependencies": [
+        {
+          "name": "benchmark",
+          "version>=": "1.8.3#3"
+        }
+      ]
     }
   },
   "builtin-baseline": "8daf70c56ba9581f5251a5d4675eb771b6b34957"

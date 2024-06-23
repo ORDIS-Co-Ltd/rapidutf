@@ -21,6 +21,25 @@ add_library(
 )
 add_library(rapidutf::rapidutf ALIAS rapidutf_rapidutf)
 
+# Check for ARM64 architecture
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_NEON)
+endif()
+
+# Check for x64 architecture
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|x64")
+    if(MSVC)
+        target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_SSE_4_2)
+    else()
+        include(CheckCXXCompilerFlag)
+        check_cxx_compiler_flag("-msse4.2" COMPILER_SUPPORTS_SSE4_2)
+        if(COMPILER_SUPPORTS_SSE4_2)
+            target_compile_options(rapidutf_rapidutf PRIVATE -msse4.2)
+            target_compile_definitions(rapidutf_rapidutf PRIVATE RAPIDUTF_USE_SSE_4_2)
+        endif()
+    endif()
+endif()
+
 include(GenerateExportHeader)
 generate_export_header(
     rapidutf_rapidutf
