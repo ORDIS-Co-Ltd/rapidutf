@@ -413,18 +413,17 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
       if (bitfield == static_cast<int>(0xFFFFFFFF))
       {
         // All characters in the chunk are ASCII
-        __m128i ascii_chunk1 = _mm256_castsi256_si128(chunk);
-        __m128i ascii_chunk2 = _mm256_extracti128_si256(chunk, 1);
+        __m256i ascii_chunk = chunk;
 
-        __m128i ascii_chunk1_hi = _mm_slli_epi16(ascii_chunk1, 8);
-        __m128i ascii_chunk2_hi = _mm_slli_epi16(ascii_chunk2, 8);
+        // Shift left by 8 bits to align ASCII values to high bytes
+        __m256i ascii_chunk_hi = _mm256_slli_epi16(ascii_chunk, 8);
 
-        ascii_chunk1 = _mm_or_si128(ascii_chunk1, ascii_chunk1_hi);
-        ascii_chunk2 = _mm_or_si128(ascii_chunk2, ascii_chunk2_hi);
+        // Combine low and high bytes
+        ascii_chunk = _mm256_or_si256(ascii_chunk, ascii_chunk_hi);
 
+        // Store the result directly into the utf16 string
         utf16.resize(utf16.size() + 16);
-        _mm_storeu_si128(reinterpret_cast<__m128i *>(&utf16[utf16.size() - 16]), ascii_chunk1);
-        _mm_storeu_si128(reinterpret_cast<__m128i *>(&utf16[utf16.size() - 8]), ascii_chunk2);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&utf16[utf16.size() - 16]), ascii_chunk);
 
         i += 32;
       }
@@ -444,6 +443,7 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
 
   return utf16;
 }
+
 
 auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 {
