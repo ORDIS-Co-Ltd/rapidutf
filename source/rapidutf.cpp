@@ -1082,6 +1082,11 @@ auto converter::utf16_to_utf32_neon(const std::u16string &utf16) -> std::u32stri
 
 auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16string
 {
+  if(!is_valid_utf32(utf32))
+  {
+    throw std::runtime_error("Invalid UTF-32 string");
+  }
+  
   std::u16string utf16;
   utf16.reserve(utf32.size() * 2);
 
