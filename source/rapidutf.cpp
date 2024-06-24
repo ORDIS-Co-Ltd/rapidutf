@@ -76,8 +76,6 @@ auto converter::is_valid_utf8_sequence(const unsigned char *bytes, int length) -
   return false;
 }
 
-
-
 auto converter::is_valid_utf8(const std::string &utf8) -> bool
 {
   const auto *bytes = reinterpret_cast<const unsigned char *>(utf8.data());  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -1071,8 +1069,8 @@ auto converter::utf16_to_utf8_neon(const std::u16string &utf16) -> std::string
   {
     if (length - i >= 16)
     {
-      const uint16x8_t chunk1 = vld1q_u16(reinterpret_cast<const uint16_t *>(chars + i)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-      const uint16x8_t chunk2 = vld1q_u16(reinterpret_cast<const uint16_t *>(chars + i + 8)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      const uint16x8_t chunk1 = vld1q_u16(reinterpret_cast<const uint16_t *>(chars + i));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      const uint16x8_t chunk2 = vld1q_u16(reinterpret_cast<const uint16_t *>(chars + i + 8));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
       const uint16x8_t mask = vdupq_n_u16(0x7F);
       const uint16x8_t result1 = vceqq_u16(vandq_u16(chunk1, mask), chunk1);
       const uint16x8_t result2 = vceqq_u16(vandq_u16(chunk2, mask), chunk2);
@@ -1092,10 +1090,10 @@ auto converter::utf16_to_utf8_neon(const std::u16string &utf16) -> std::string
         const uint8x16_t chunk2_hi_wide = vcombine_u8(chunk2_hi, chunk2_hi);
         const size_t old_size = utf8.size();
         utf8.resize(old_size + 64);  // Resize before writing
-        vst1q_u8(reinterpret_cast<uint8_t *>(&utf8[old_size]), chunk1_lo_wide); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        vst1q_u8(reinterpret_cast<uint8_t *>(&utf8[old_size + 16]), chunk1_hi_wide); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        vst1q_u8(reinterpret_cast<uint8_t *>(&utf8[old_size + 32]), chunk2_lo_wide); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        vst1q_u8(reinterpret_cast<uint8_t *>(&utf8[old_size + 48]), chunk2_hi_wide); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u8(reinterpret_cast<uint8_t *>(&utf8[old_size]), chunk1_lo_wide);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u8(reinterpret_cast<uint8_t *>(&utf8[old_size + 16]), chunk1_hi_wide);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u8(reinterpret_cast<uint8_t *>(&utf8[old_size + 32]), chunk2_lo_wide);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u8(reinterpret_cast<uint8_t *>(&utf8[old_size + 48]), chunk2_hi_wide);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
         i += 16;
       }
       else
@@ -1127,7 +1125,7 @@ auto converter::utf16_to_utf32_neon(const std::u16string &utf16) -> std::u32stri
   {
     if (length - i >= 8)
     {
-      const uint16x8_t chunk = vld1q_u16(reinterpret_cast<const uint16_t *>(chars + i)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      const uint16x8_t chunk = vld1q_u16(reinterpret_cast<const uint16_t *>(chars + i));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
       const uint16x8_t high_surrogate = vandq_u16(chunk, vdupq_n_u16(0xFC00));
       const uint16x8_t is_surrogate = vceqq_u16(high_surrogate, vdupq_n_u16(0xD800));
       const uint64_t bitfield = vgetq_lane_u64(vreinterpretq_u64_u16(is_surrogate), 0);
@@ -1165,7 +1163,7 @@ auto converter::utf16_to_utf32_neon(const std::u16string &utf16) -> std::u32stri
   return utf32;
 }
 
-auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16string // NOLINT(readability-function-cognitive-complexity)
+auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16string  // NOLINT(readability-function-cognitive-complexity)
 {
   if (!is_valid_utf32(utf32))
   {
@@ -1184,10 +1182,10 @@ auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16stri
     std::size_t i = 0;
     for (; i + 16 <= length; i += 16)
     {
-      const uint32x4_t chunk1 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-      const uint32x4_t chunk2 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i + 4)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast) 
-      const uint32x4_t chunk3 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i + 8)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-      const uint32x4_t chunk4 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i + 12)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      const uint32x4_t chunk1 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      const uint32x4_t chunk2 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i + 4));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      const uint32x4_t chunk3 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i + 8));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      const uint32x4_t chunk4 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i + 12));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
       const uint32x4_t mask1 = vcgtq_u32(chunk1, vdupq_n_u32(0xFFFF));
       const uint32x4_t mask2 = vcgtq_u32(chunk2, vdupq_n_u32(0xFFFF));
@@ -1208,9 +1206,9 @@ auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16stri
         const uint16x8_t utf16_chunk1 = vcombine_u16(vmovn_u32(chunk1), vmovn_u32(chunk2));
         const uint16x8_t utf16_chunk2 = vcombine_u16(vmovn_u32(chunk3), vmovn_u32(chunk4));
 
-        std::array<char16_t, 16> temp{0};
-        vst1q_u16(reinterpret_cast<uint16_t *>(temp.data()), utf16_chunk1); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        vst1q_u16(reinterpret_cast<uint16_t *>(temp.data() + 8), utf16_chunk2); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        std::array<char16_t, 16> temp {0};
+        vst1q_u16(reinterpret_cast<uint16_t *>(temp.data()), utf16_chunk1);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u16(reinterpret_cast<uint16_t *>(temp.data() + 8), utf16_chunk2);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
         utf16.append(temp.data(), 16);
       }
       else
@@ -1264,8 +1262,8 @@ auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16stri
   else if (length >= 8)
   {
     // Process 8 characters using NEON
-    const uint32x4_t chunk1 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-    const uint32x4_t chunk2 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + 4)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    const uint32x4_t chunk1 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    const uint32x4_t chunk2 = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + 4));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     const uint32x4_t mask1 = vcgtq_u32(chunk1, vdupq_n_u32(0xFFFF));
     const uint32x4_t mask2 = vcgtq_u32(chunk2, vdupq_n_u32(0xFFFF));
@@ -1278,8 +1276,8 @@ auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16stri
     if (combined == 0)
     {
       const uint16x8_t utf16_chunk = vcombine_u16(vmovn_u32(chunk1), vmovn_u32(chunk2));
-      std::array<char16_t, 8> temp{0};
-      vst1q_u16(reinterpret_cast<uint16_t *>(temp.data()), utf16_chunk); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      std::array<char16_t, 8> temp {0};
+      vst1q_u16(reinterpret_cast<uint16_t *>(temp.data()), utf16_chunk);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
       utf16.append(temp.data(), 8);
     }
     else
@@ -1330,7 +1328,7 @@ auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16stri
   else if (length >= 4)
   {
     // Process 4 characters using NEON
-    const uint32x4_t chunk = vld1q_u32(reinterpret_cast<const uint32_t *>(chars)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    const uint32x4_t chunk = vld1q_u32(reinterpret_cast<const uint32_t *>(chars));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
     const uint32x4_t mask = vcgtq_u32(chunk, vdupq_n_u32(0xFFFF));
     const uint64x2_t result = vreinterpretq_u64_u32(mask);
     const uint64_t combined = vgetq_lane_u64(result, 0) | vgetq_lane_u64(result, 1);
@@ -1338,8 +1336,8 @@ auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16stri
     if (combined == 0)
     {
       const uint16x4_t utf16_chunk = vmovn_u32(chunk);
-      std::array<char16_t, 4> temp{0};
-      vst1_u16(reinterpret_cast<uint16_t *>(temp.data()), utf16_chunk); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      std::array<char16_t, 4> temp {0};
+      vst1_u16(reinterpret_cast<uint16_t *>(temp.data()), utf16_chunk);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
       utf16.append(temp.data(), 4);
     }
     else
@@ -1408,10 +1406,10 @@ auto converter::utf8_to_utf32_neon(const std::string &utf8) -> std::u32string
   std::u32string utf32;
   utf32.reserve(utf8.size());
 
-  const auto *bytes = reinterpret_cast<const unsigned char *>(utf8.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+  const auto *bytes = reinterpret_cast<const unsigned char *>(utf8.data());  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
   const std::size_t length = utf8.length();
 
-  std::array<char32_t, 16> buffer{0};  // Temporary buffer to hold 16 char32_t values
+  std::array<char32_t, 16> buffer {0};  // Temporary buffer to hold 16 char32_t values
 
   for (std::size_t i = 0; i < length;)
   {
@@ -1435,10 +1433,10 @@ auto converter::utf8_to_utf32_neon(const std::string &utf8) -> std::u32string
         const uint32x4_t hi_lo_chars = vmovl_u16(vget_low_u16(hi_chars));
         const uint32x4_t hi_hi_chars = vmovl_u16(vget_high_u16(hi_chars));
 
-        vst1q_u32(reinterpret_cast<uint32_t *>(buffer.data()), lo_lo_chars); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        vst1q_u32(reinterpret_cast<uint32_t *>(buffer.data()) + 4, lo_hi_chars); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        vst1q_u32(reinterpret_cast<uint32_t *>(buffer.data()) + 8, hi_lo_chars); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
-        vst1q_u32(reinterpret_cast<uint32_t *>(buffer.data()) + 12, hi_hi_chars);// NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u32(reinterpret_cast<uint32_t *>(buffer.data()), lo_lo_chars);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u32(reinterpret_cast<uint32_t *>(buffer.data()) + 4, lo_hi_chars);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u32(reinterpret_cast<uint32_t *>(buffer.data()) + 8, hi_lo_chars);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        vst1q_u32(reinterpret_cast<uint32_t *>(buffer.data()) + 12, hi_hi_chars);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
         utf32.append(buffer.begin(), buffer.end());
 
@@ -1478,14 +1476,14 @@ auto converter::utf32_to_utf8_neon(const std::u32string &utf32) -> std::string
   {
     if (length - i >= 4)
     {
-      const uint32x4_t chunk = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      const uint32x4_t chunk = vld1q_u32(reinterpret_cast<const uint32_t *>(chars + i));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
       const uint32x4_t mask = vdupq_n_u32(0x7F);
       const uint32x4_t result = vceqq_u32(vandq_u32(chunk, mask), chunk);
       const uint64_t bitfield = vgetq_lane_u64(vreinterpretq_u64_u32(result), 0) & 0xFFFFFFFF;
 
       if (bitfield == 0xFFFFFFFF)
       {
-        std::array<char, 4> temp{0};
+        std::array<char, 4> temp {0};
         temp[0] = static_cast<char>(vgetq_lane_u32(chunk, 0));
         temp[1] = static_cast<char>(vgetq_lane_u32(chunk, 1));
         temp[2] = static_cast<char>(vgetq_lane_u32(chunk, 2));
