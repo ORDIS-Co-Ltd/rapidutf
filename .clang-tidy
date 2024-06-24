@@ -152,4 +152,8 @@ CheckOptions:
     value: 'lower_case'
   - key: 'readability-identifier-naming.VirtualMethodCase'
     value: 'lower_case'
+  - key: 'readability-identifier-length.IgnoredParameterNames'
+    value: '^(id|fd)$'
+  - key: 'readability-identifier-length.IgnoredVariableNames'
+    value: '^(i|it|id|fd|op|tm|ss|ch)$'
 ...

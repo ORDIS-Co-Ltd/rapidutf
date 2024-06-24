@@ -28,7 +28,7 @@ static inline int ctz(uint32_t value)
 }
 #else
 // Implementation for GCC and Clang
-static inline int ctz(uint32_t value)
+static inline auto ctz(uint32_t value) -> int
 {
   return __builtin_ctz(value);
 }
@@ -38,54 +38,60 @@ auto converter::is_valid_utf8_sequence(const unsigned char *bytes, int length) -
 {
   if (length == 1)
   {
-    return (bytes[0] & 0x80) == 0;
+    return (bytes[0] & 0x80U) == 0;
   }
-  else if (length == 2)
+  if (length == 2)
   {
-    return (bytes[0] & 0xE0) == 0xC0 && (bytes[1] & 0xC0) == 0x80;
+    return (bytes[0] & 0xE0U) == 0xC0 && (bytes[1] & 0xC0U) == 0x80;
   }
-  else if (length == 3)
+  if (length == 3)
   {
-    return (bytes[0] & 0xF0) == 0xE0 && (bytes[1] & 0xC0) == 0x80 && (bytes[2] & 0xC0) == 0x80;
+    return (bytes[0] & 0xF0U) == 0xE0 && (bytes[1] & 0xC0U) == 0x80 && (bytes[2] & 0xC0U) == 0x80;
   }
-  else if (length == 4)
+  if (length == 4)
   {
-    return (bytes[0] & 0xF8) == 0xF0 && (bytes[1] & 0xC0) == 0x80 && (bytes[2] & 0xC0) == 0x80 && (bytes[3] & 0xC0) == 0x80;
+    return (bytes[0] & 0xF8U) == 0xF0 && (bytes[1] & 0xC0U) == 0x80 && (bytes[2] & 0xC0U) == 0x80 && (bytes[3] & 0xC0U) == 0x80;
   }
   return false;
 }
 
 auto converter::is_valid_utf8(const std::string &utf8) -> bool
 {
-  const auto *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
+  const auto *bytes = reinterpret_cast<const unsigned char *>(utf8.data());  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
   std::size_t length = utf8.length();
 
   for (std::size_t i = 0; i < length;)
   {
-    if ((bytes[i] & 0x80) == 0)
+    if ((bytes[i] & 0x80U) == 0)
     {
       // ASCII character, one byte
       i += 1;
     }
-    else if ((bytes[i] & 0xE0) == 0xC0)
+    else if ((bytes[i] & 0xE0U) == 0xC0)
     {
       // Two-byte character, check if the next byte is a valid continuation byte
       if (i + 1 >= length || !is_valid_utf8_sequence(bytes + i, 2))
+      {
         return false;
+      }
       i += 2;
     }
-    else if ((bytes[i] & 0xF0) == 0xE0)
+    else if ((bytes[i] & 0xF0U) == 0xE0U)
     {
       // Three-byte character, check if the next two bytes are valid continuation bytes
       if (i + 2 >= length || !is_valid_utf8_sequence(bytes + i, 3))
+      {
         return false;
+      }
       i += 3;
     }
-    else if ((bytes[i] & 0xF8) == 0xF0)
+    else if ((bytes[i] & 0xF8U) == 0xF0U)
     {
       // Four-byte character, check if the next three bytes are valid continuation bytes
       if (i + 3 >= length || !is_valid_utf8_sequence(bytes + i, 4))
+      {
         return false;
+      }
       i += 4;
     }
     else
@@ -104,17 +110,21 @@ auto converter::is_valid_utf16(const std::u16string &utf16) -> bool
 
   for (std::size_t i = 0; i < length; ++i)
   {
-    char16_t c = chars[i];
-    if (c >= 0xD800 && c <= 0xDBFF)
+    char16_t chr = chars[i];
+    if (chr >= 0xD800 && chr <= 0xDBFF)
     {
       if (i + 1 >= length)
+      {
         return false;
+      }
       char16_t next = chars[i + 1];
       if (next < 0xDC00 || next > 0xDFFF)
+      {
         return false;
+      }
       ++i;
     }
-    else if (c >= 0xDC00 && c <= 0xDFFF)
+    else if (chr >= 0xDC00 && chr <= 0xDFFF)
     {
       return false;
     }
@@ -129,16 +139,16 @@ auto converter::is_valid_utf32(const std::u32string &utf32) -> bool
 
   for (std::size_t i = 0; i < length; ++i)
   {
-    char32_t c = chars[i];
+    char32_t chr = chars[i];
 
     // Check if the code point is within the Unicode range
-    if (c > 0x10FFFF)
+    if (chr > 0x10FFFF)
     {
       return false;
     }
 
     // Surrogate pairs are not valid in UTF-32
-    if (c >= 0xD800 && c <= 0xDFFF)
+    if (chr >= 0xD800 && chr <= 0xDFFF)
     {
       return false;
     }
@@ -147,42 +157,50 @@ auto converter::is_valid_utf32(const std::u32string &utf32) -> bool
   return true;
 }
 
-void converter::utf8_to_utf16_scalar(const unsigned char *bytes, std::size_t length, std::u16string &utf16)
+void converter::utf8_to_utf16_scalar(const unsigned char *bytes, std::size_t length, std::u16string &utf16)  // NOLINT(readability-function-cognitive-complexity)
 {
   for (std::size_t i = 0; i < length;)
   {
-    if ((bytes[i] & 0x80) == 0)
+    if ((bytes[i] & 0x80U) == 0)
     {
       // ASCII character, one byte
       utf16.push_back(static_cast<char16_t>(bytes[i]));
       i += 1;
     }
-    else if ((bytes[i] & 0xE0) == 0xC0)
+    else if ((bytes[i] & 0xE0U) == 0xC0U)
     {
       // Two-byte character, check if the next byte is a valid continuation byte
       if (i + 1 >= length || !is_valid_utf8_sequence(bytes + i, 2))
+      {
         throw std::runtime_error("Invalid UTF-8 sequence");
-      utf16.push_back(static_cast<char16_t>(((bytes[i] & 0x1F) << 6) | (bytes[i + 1] & 0x3F)));
+      }
+      utf16.push_back(static_cast<char16_t>(((bytes[i] & 0x1FU) << 6U) | (bytes[i + 1] & 0x3FU)));
       i += 2;
     }
-    else if ((bytes[i] & 0xF0) == 0xE0)
+    else if ((bytes[i] & 0xF0U) == 0xE0U)
     {
       // Three-byte character, check if the next two bytes are valid continuation bytes
       if (i + 2 >= length || !is_valid_utf8_sequence(bytes + i, 3))
+      {
         throw std::runtime_error("Invalid UTF-8 sequence");
-      utf16.push_back(static_cast<char16_t>(((bytes[i] & 0x0F) << 12) | ((bytes[i + 1] & 0x3F) << 6) | (bytes[i + 2] & 0x3F)));
+      }
+      utf16.push_back(static_cast<char16_t>(((bytes[i] & 0x0FU) << 12U) | ((bytes[i + 1] & 0x3FU) << 6U) | (bytes[i + 2] & 0x3FU)));
       i += 3;
     }
-    else if ((bytes[i] & 0xF8) == 0xF0)
+    else if ((bytes[i] & 0xF8U) == 0xF0U)
     {
       // Four-byte character, check if the next three bytes are valid continuation bytes
       if (i + 3 >= length || !is_valid_utf8_sequence(bytes + i, 4))
+      {
         throw std::runtime_error("Invalid UTF-8 sequence");
-      uint32_t codepoint = (static_cast<uint32_t>(bytes[i] & 0x07) << 18) | (static_cast<uint32_t>(bytes[i + 1] & 0x3F) << 12) | (static_cast<uint32_t>(bytes[i + 2] & 0x3F) << 6)
-        | (static_cast<uint32_t>(bytes[i + 3] & 0x3F));
-      if (codepoint > 0x10FFFF)
+      }
+      uint32_t codepoint = (static_cast<uint32_t>(bytes[i] & 0x07U) << 18U) | (static_cast<uint32_t>(bytes[i + 1] & 0x3FU) << 12U)
+        | (static_cast<uint32_t>(bytes[i + 2] & 0x3FU) << 6U) | (static_cast<uint32_t>(bytes[i + 3] & 0x3FU));
+      if (codepoint > 0x10FFFFU)
+      {
         throw std::runtime_error("Invalid UTF-8 codepoint");
-      if (codepoint <= 0xFFFF)
+      }
+      if (codepoint <= 0xFFFFU)
       {
         utf16.push_back(static_cast<char16_t>(codepoint));
       }
@@ -190,8 +208,8 @@ void converter::utf8_to_utf16_scalar(const unsigned char *bytes, std::size_t len
       {
         // Encode as a surrogate pair
         codepoint -= 0x10000;
-        utf16.push_back(static_cast<char16_t>((codepoint >> 10) + 0xD800));
-        utf16.push_back(static_cast<char16_t>((codepoint & 0x3FF) + 0xDC00));
+        utf16.push_back(static_cast<char16_t>((codepoint >> 10U) + 0xD800U));
+        utf16.push_back(static_cast<char16_t>((codepoint & 0x3FFU) + 0xDC00U));
       }
       i += 4;
     }
@@ -206,37 +224,41 @@ void converter::utf16_to_utf8_scalar(const char16_t *chars, std::size_t length, 
 {
   for (std::size_t i = 0; i < length; ++i)
   {
-    char16_t c = chars[i];
+    char16_t chr = chars[i];
 
-    if (c < 0x80)
+    if (chr < 0x80)
     {
       // 1-byte sequence (ASCII)
-      utf8.push_back(static_cast<char>(c));
+      utf8.push_back(static_cast<char>(chr));
     }
-    else if (c < 0x800)
+    else if (chr < 0x800)
     {
       // 2-byte sequence
-      utf8.push_back(static_cast<char>(0xC0 | ((c >> 6) & 0x1F)));
-      utf8.push_back(static_cast<char>(0x80 | (c & 0x3F)));
+      utf8.push_back(static_cast<char>(0xC0U | ((static_cast<unsigned int>(chr) >> 6U) & 0x1FU)));
+      utf8.push_back(static_cast<char>(0x80U | (static_cast<unsigned int>(chr) & 0x3FU)));
     }
-    else if ((c >= 0xD800) && (c <= 0xDBFF))
+    else if ((chr >= 0xD800U) && (chr <= 0xDBFFU))
     {
       // Handle UTF-16 surrogate pairs
       if (i + 1 >= length)
+      {
         throw std::runtime_error("Invalid UTF-16 sequence");
+      }
 
-      char16_t c2 = chars[i + 1];
-      if ((c2 < 0xDC00) || (c2 > 0xDFFF))
+      char16_t chr2 = chars[i + 1];
+      if ((chr2 < 0xDC00U) || (chr2 > 0xDFFFU))
+      {
         throw std::runtime_error("Invalid UTF-16 sequence");
+      }
 
-      uint32_t codepoint = static_cast<uint32_t>(((c & 0x3FF) << 10) | (c2 & 0x3FF)) + 0x10000;
-      utf8.push_back(static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
-      utf8.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+      uint32_t codepoint = static_cast<uint32_t>(((chr & 0x3FFU) << 10U) | (chr2 & 0x3FFU)) + 0x10000U;
+      utf8.push_back(static_cast<char>(0xF0U | ((codepoint >> 18U) & 0x07U)));
+      utf8.push_back(static_cast<char>(0x80U | ((codepoint >> 12U) & 0x3FU)));
+      utf8.push_back(static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3FU)));
+      utf8.push_back(static_cast<char>(0x80U | (codepoint & 0x3FU)));
       ++i;  // Skip the next character as it is part of the surrogate pair
     }
-    else if ((c >= 0xDC00) && (c <= 0xDFFF))
+    else if ((chr >= 0xDC00U) && (chr <= 0xDFFFU))
     {
       // Lone low surrogate, not valid by itself
       throw std::runtime_error("Invalid UTF-16 sequence");
@@ -244,9 +266,9 @@ void converter::utf16_to_utf8_scalar(const char16_t *chars, std::size_t length, 
     else
     {
       // 3-byte sequence
-      utf8.push_back(static_cast<char>(0xE0 | ((c >> 12) & 0x0F)));
-      utf8.push_back(static_cast<char>(0x80 | ((c >> 6) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | (c & 0x3F)));
+      utf8.push_back(static_cast<char>(0xE0U | ((static_cast<unsigned int>(chr) >> 12U) & 0x0FU)));
+      utf8.push_back(static_cast<char>(0x80U | ((static_cast<unsigned int>(chr) >> 6U) & 0x3FU)));
+      utf8.push_back(static_cast<char>(0x80U | (static_cast<unsigned int>(chr) & 0x3FU)));
     }
   }
 }
@@ -255,23 +277,27 @@ void converter::utf16_to_utf32_scalar(const char16_t *chars, std::size_t length,
 {
   for (std::size_t i = 0; i < length; ++i)
   {
-    char16_t c = chars[i];
+    char16_t chr = chars[i];
 
-    if (c >= 0xD800 && c <= 0xDBFF)
+    if (chr >= 0xD800U && chr <= 0xDBFFU)
     {
       // High surrogate, must be followed by a low surrogate
       if (i + 1 >= length)
+      {
         throw std::runtime_error("Invalid UTF-16 sequence (truncated surrogate pair)");
+      }
 
-      char16_t c2 = chars[i + 1];
-      if (c2 < 0xDC00 || c2 > 0xDFFF)
+      char16_t chr2 = chars[i + 1];
+      if (chr2 < 0xDC00U || chr2 > 0xDFFFU)
+      {
         throw std::runtime_error("Invalid UTF-16 sequence (invalid surrogate pair)");
+      }
 
-      uint32_t codepoint = static_cast<uint32_t>(((c & 0x3FF) << 10) | (c2 & 0x3FF)) + 0x10000;
+      uint32_t codepoint = static_cast<uint32_t>(((static_cast<unsigned int>(chr) & 0x3FFU) << 10U) | (static_cast<unsigned int>(chr2) & 0x3FFU)) + 0x10000U;
       utf32.push_back(codepoint);
       ++i;  // Skip the next character as it is part of the surrogate pair
     }
-    else if (c >= 0xDC00 && c <= 0xDFFF)
+    else if (chr >= 0xDC00U && chr <= 0xDFFFU)
     {
       // Low surrogate without preceding high surrogate
       throw std::runtime_error("Invalid UTF-16 sequence (lone low surrogate)");
@@ -279,7 +305,7 @@ void converter::utf16_to_utf32_scalar(const char16_t *chars, std::size_t length,
     else
     {
       // Valid BMP character
-      utf32.push_back(static_cast<char32_t>(c));
+      utf32.push_back(static_cast<char32_t>(chr));
     }
   }
 }
@@ -290,17 +316,17 @@ void converter::utf32_to_utf16_scalar(const char32_t *chars, std::size_t length,
   {
     char32_t codepoint = chars[i];
 
-    if (codepoint <= 0xFFFF)
+    if (codepoint <= 0xFFFFU)
     {
       // BMP character
       utf16.push_back(static_cast<char16_t>(codepoint));
     }
-    else if (codepoint <= 0x10FFFF)
+    else if (codepoint <= 0x10FFFFU)
     {
       // Encode as a surrogate pair
       codepoint -= 0x10000;
-      utf16.push_back(static_cast<char16_t>((codepoint >> 10) + 0xD800));
-      utf16.push_back(static_cast<char16_t>((codepoint & 0x3FF) + 0xDC00));
+      utf16.push_back(static_cast<char16_t>((codepoint >> 10U) + 0xD800U));
+      utf16.push_back(static_cast<char16_t>((codepoint & 0x3FFU) + 0xDC00U));
     }
     else
     {
@@ -310,58 +336,70 @@ void converter::utf32_to_utf16_scalar(const char32_t *chars, std::size_t length,
   }
 }
 
-void converter::utf8_to_utf32_scalar(const unsigned char *bytes, std::size_t length, std::u32string &utf32)
+void converter::utf8_to_utf32_scalar(const unsigned char *bytes, std::size_t length, std::u32string &utf32)  // NOLINT(readability-function-cognitive-complexity)
 {
   for (std::size_t i = 0; i < length;)
   {
-    unsigned char c1 = bytes[i];
+    unsigned char chr1 = bytes[i];
 
-    if (c1 < 0x80)
+    if (chr1 < 0x80)
     {
       // 1-byte sequence (ASCII)
-      utf32.push_back(static_cast<char32_t>(c1));
+      utf32.push_back(static_cast<char32_t>(chr1));
       ++i;
     }
-    else if ((c1 & 0xE0) == 0xC0)
+    else if ((chr1 & 0xE0U) == 0xC0U)
     {
       // 2-byte sequence
       if (i + 1 >= length)
+      {
         throw std::runtime_error("Invalid UTF-8 sequence (truncated 2-byte sequence)");
+      }
 
-      unsigned char c2 = bytes[i + 1];
-      if ((c2 & 0xC0) != 0x80)
+      unsigned char chr2 = bytes[i + 1];
+      if ((chr2 & 0xC0U) != 0x80U)
+      {
         throw std::runtime_error("Invalid UTF-8 sequence (invalid continuation byte in 2-byte sequence)");
+      }
 
-      utf32.push_back(static_cast<char32_t>(((c1 & 0x1F) << 6) | (c2 & 0x3F)));
+      utf32.push_back(static_cast<char32_t>(((chr1 & 0x1FU) << 6U) | (chr2 & 0x3FU)));
       i += 2;
     }
-    else if ((c1 & 0xF0) == 0xE0)
+    else if ((chr1 & 0xF0U) == 0xE0U)
     {
       // 3-byte sequence
       if (i + 2 >= length)
+      {
         throw std::runtime_error("Invalid UTF-8 sequence (truncated 3-byte sequence)");
+      }
 
-      unsigned char c2 = bytes[i + 1];
-      unsigned char c3 = bytes[i + 2];
-      if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80)
+      unsigned char chr2 = bytes[i + 1];
+      unsigned char chr3 = bytes[i + 2];
+      if ((chr2 & 0xC0U) != 0x80U || (chr3 & 0xC0U) != 0x80U)
+      {
         throw std::runtime_error("Invalid UTF-8 sequence (invalid continuation bytes in 3-byte sequence)");
+      }
 
-      utf32.push_back(static_cast<char32_t>(((c1 & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F)));
+      utf32.push_back(static_cast<char32_t>(((chr1 & 0x0FU) << 12U) | ((chr2 & 0x3FU) << 6U) | (chr3 & 0x3FU)));
       i += 3;
     }
-    else if ((c1 & 0xF8) == 0xF0)
+    else if ((chr1 & 0xF8U) == 0xF0U)
     {
       // 4-byte sequence
       if (i + 3 >= length)
+      {
         throw std::runtime_error("Invalid UTF-8 sequence (truncated 4-byte sequence)");
+      }
 
-      unsigned char c2 = bytes[i + 1];
-      unsigned char c3 = bytes[i + 2];
-      unsigned char c4 = bytes[i + 3];
-      if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80)
+      unsigned char chr2 = bytes[i + 1];
+      unsigned char chr3 = bytes[i + 2];
+      unsigned char chr4 = bytes[i + 3];
+      if ((chr2 & 0xC0U) != 0x80U || (chr3 & 0xC0U) != 0x80U || (chr4 & 0xC0U) != 0x80U)
+      {
         throw std::runtime_error("Invalid UTF-8 sequence (invalid continuation bytes in 4-byte sequence)");
+      }
 
-      utf32.push_back(static_cast<char32_t>(((c1 & 0x07) << 18) | ((c2 & 0x3F) << 12) | ((c3 & 0x3F) << 6) | (c4 & 0x3F)));
+      utf32.push_back(static_cast<char32_t>(((chr1 & 0x07U) << 18U) | ((chr2 & 0x3FU) << 12U) | ((chr3 & 0x3FU) << 6U) | (chr4 & 0x3FU)));
       i += 4;
     }
     else
@@ -385,23 +423,23 @@ void converter::utf32_to_utf8_scalar(const char32_t *chars, std::size_t length, 
     else if (codepoint < 0x800)
     {
       // 2-byte sequence
-      utf8.push_back(static_cast<char>(0xC0 | ((codepoint >> 6) & 0x1F)));
-      utf8.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+      utf8.push_back(static_cast<char>(0xC0U | ((codepoint >> 6U) & 0x1FU)));
+      utf8.push_back(static_cast<char>(0x80U | (codepoint & 0x3FU)));
     }
     else if (codepoint < 0x10000)
     {
       // 3-byte sequence
-      utf8.push_back(static_cast<char>(0xE0 | ((codepoint >> 12) & 0x0F)));
-      utf8.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+      utf8.push_back(static_cast<char>(0xE0U | ((codepoint >> 12U) & 0x0FU)));
+      utf8.push_back(static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3FU)));
+      utf8.push_back(static_cast<char>(0x80U | (codepoint & 0x3FU)));
     }
     else if (codepoint <= 0x10FFFF)
     {
       // 4-byte sequence
-      utf8.push_back(static_cast<char>(0xF0 | ((codepoint >> 18) & 0x07)));
-      utf8.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-      utf8.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+      utf8.push_back(static_cast<char>(0xF0U | ((codepoint >> 18U) & 0x07U)));
+      utf8.push_back(static_cast<char>(0x80U | ((codepoint >> 12U) & 0x3FU)));
+      utf8.push_back(static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3FU)));
+      utf8.push_back(static_cast<char>(0x80U | (codepoint & 0x3FU)));
     }
     else
     {
@@ -417,14 +455,14 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
   std::u16string utf16;
   utf16.reserve(utf8.size());
 
-  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
+  const auto *bytes = reinterpret_cast<const unsigned char *>(utf8.data());  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
   std::size_t length = utf8.length();
 
   for (std::size_t i = 0; i < length;)
   {
     if (length - i >= 32)
     {
-      __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes + i));
+      __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes + i));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
       __m256i mask = _mm256_set1_epi8(static_cast<char>(0x80));
       __m256i result = _mm256_cmpeq_epi8(_mm256_and_si256(chunk, mask), _mm256_setzero_si256());
       int bitfield = _mm256_movemask_epi8(result);
@@ -442,7 +480,7 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
 
         // Store the result directly into the utf16 string
         utf16.resize(utf16.size() + 16);
-        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&utf16[utf16.size() - 16]), ascii_chunk);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(&utf16[utf16.size() - 16]), ascii_chunk);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
         i += 32;
       }
@@ -473,13 +511,13 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 
   while (len >= 16)
   {
-    __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src));
+    __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     // Check for surrogate pairs
     __m256i surrogates =
-      _mm256_and_si256(_mm256_cmpgt_epi16(input, _mm256_set1_epi16(static_cast<short>(0xD7FF))), _mm256_cmpgt_epi16(_mm256_set1_epi16(static_cast<short>(0xE000)), input));
+      _mm256_and_si256(_mm256_cmpgt_epi16(input, _mm256_set1_epi16(static_cast<int16_t>(0xD7FF))), _mm256_cmpgt_epi16(_mm256_set1_epi16(static_cast<int16_t>(0xE000)), input));
 
-    uint32_t surrogate_mask = static_cast<uint32_t>(_mm256_movemask_epi8(surrogates));
+    auto surrogate_mask = static_cast<uint32_t>(_mm256_movemask_epi8(surrogates));
 
     if (surrogate_mask == 0)
     {
@@ -497,11 +535,11 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
       __m256i output = _mm256_packus_epi16(result1, result2);
       output = _mm256_permutevar8x32_epi32(output, _mm256_setr_epi32(0, 1, 4, 5, 2, 3, 6, 7));
 
-      char buffer[32];
-      _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer), output);
+      std::array<char, 32> buffer {0};
+      _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer.data()), output);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
       size_t output_size = 16 + static_cast<size_t>(_mm256_movemask_epi8(mask1)) + static_cast<size_t>(_mm256_movemask_epi8(mask2));
-      utf8.append(buffer, output_size);
+      utf8.append(buffer.data(), output_size);
 
       src += 16;
       len -= 16;
@@ -519,7 +557,7 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
   return utf8;
 }
 
-auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string
+auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string  // NOLINT(readability-function-cognitive-complexity)
 {
   std::u32string utf32;
   utf32.reserve(utf16.size());
@@ -527,18 +565,18 @@ auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32stri
   const char16_t *input = utf16.data();
   const size_t length = utf16.size();
 
-  char32_t buffer[16];
+  std::array<char32_t, 16> buffer {0};
   size_t i = 0;
 
   for (; i + 15 < length; i += 16)
   {
-    __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(input + i));
+    __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(input + i));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     // Check for surrogates
-    __m256i surr_mask = _mm256_set1_epi16(static_cast<short>(0xF800));
-    __m256i surr_test = _mm256_set1_epi16(static_cast<short>(0xD800));
+    __m256i surr_mask = _mm256_set1_epi16(static_cast<int16_t>(0xF800));
+    __m256i surr_test = _mm256_set1_epi16(static_cast<int16_t>(0xD800));
     __m256i is_surrogate = _mm256_cmpeq_epi16(_mm256_and_si256(data, surr_mask), surr_test);
-    uint32_t mask = static_cast<uint32_t>(_mm256_movemask_epi8(is_surrogate));
+    auto mask = static_cast<uint32_t>(_mm256_movemask_epi8(is_surrogate));
 
     if (mask == 0)
     {
@@ -546,9 +584,9 @@ auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32stri
       __m256i low = _mm256_unpacklo_epi16(data, _mm256_setzero_si256());
       __m256i high = _mm256_unpackhi_epi16(data, _mm256_setzero_si256());
 
-      _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer), low);
-      _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer + 8), high);
-      utf32.insert(utf32.end(), buffer, buffer + 16);
+      _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer.data()), low);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer.data() + 8), high);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      utf32.insert(utf32.end(), buffer.data(), buffer.data() + 16);
     }
     else
     {
@@ -571,7 +609,7 @@ auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32stri
           {
             throw std::runtime_error("Invalid UTF-16: Invalid low surrogate");
           }
-          uint32_t surrogate_pair = 0x10000 + ((static_cast<uint32_t>(part) - 0xD800) << 10) + (static_cast<uint32_t>(low_surrogate) - 0xDC00);
+          uint32_t surrogate_pair = 0x10000U + ((static_cast<uint32_t>(part) - 0xD800U) << 10U) + (static_cast<uint32_t>(low_surrogate) - 0xDC00U);
           utf32.push_back(surrogate_pair);
           ++j;  // skip the next code unit
         }
@@ -602,7 +640,7 @@ auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32stri
       {
         throw std::runtime_error("Invalid UTF-16: Invalid low surrogate");
       }
-      uint32_t surrogate_pair = 0x10000 + ((static_cast<uint32_t>(part) - 0xD800) << 10) + (static_cast<uint32_t>(low_surrogate) - 0xDC00);
+      uint32_t surrogate_pair = 0x10000U + ((static_cast<uint32_t>(part) - 0xD800U) << 10U) + (static_cast<uint32_t>(low_surrogate) - 0xDC00U);
       utf32.push_back(surrogate_pair);
       ++i;  // skip the next code unit
     }
@@ -620,14 +658,14 @@ auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16stri
   std::u16string utf16;
   utf16.reserve(utf32.size());
 
-  const uint32_t *src = reinterpret_cast<const uint32_t *>(utf32.data());
+  const auto *src = reinterpret_cast<const uint32_t *>(utf32.data());  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
   size_t len = utf32.size();
 
   while (len > 0)
   {
     if (len >= 8)
     {
-      __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src));
+      __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
       // Check if all code points are valid (0 <= x <= 0x10FFFF, excluding surrogates)
       __m256i too_large = _mm256_cmpgt_epi32(input, _mm256_set1_epi32(0x10FFFF));
@@ -641,18 +679,19 @@ auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16stri
 
       // Check if all code points are below 0x10000
       __m256i mask = _mm256_cmpgt_epi32(input, _mm256_set1_epi32(0xFFFF));
-      int maskResult = _mm256_movemask_ps(_mm256_castsi256_ps(mask));
+      int mask_result = _mm256_movemask_ps(_mm256_castsi256_ps(mask));
 
-      if (maskResult == 0)
+      if (mask_result == 0)
       {
         // All code points are below 0x10000, direct conversion
         __m128i low = _mm256_castsi256_si128(input);
         __m128i high = _mm256_extracti128_si256(input, 1);
         __m128i result = _mm_packus_epi32(low, high);
 
-        char16_t buffer[8];
-        _mm_storeu_si128(reinterpret_cast<__m128i *>(buffer), result);
-        utf16.append(buffer, 8);
+        // char16_t buffer[8];
+        std::array<char16_t, 8> buffer {0};
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(buffer.data()), result);  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        utf16.append(buffer.data(), 8);
 
         src += 8;
         len -= 8;
@@ -684,30 +723,28 @@ auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16stri
     else
     {
       codepoint -= 0x10000;
-      utf16.push_back(static_cast<char16_t>((codepoint >> 10) + 0xD800));
-      utf16.push_back(static_cast<char16_t>((codepoint & 0x3FF) + 0xDC00));
+      utf16.push_back(static_cast<char16_t>((codepoint >> 10U) + 0xD800U));
+      utf16.push_back(static_cast<char16_t>((codepoint & 0x3FFU) + 0xDC00U));
     }
   }
 
   return utf16;
 }
 
-auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
+auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string  // NOLINT(readability-function-cognitive-complexity)
 {
   std::u32string utf32;
   utf32.reserve(utf8.size());  // Reserve space for worst case scenario
 
-  const uint8_t *input = reinterpret_cast<const uint8_t *>(utf8.data());
+  const auto *input = reinterpret_cast<const uint8_t *>(utf8.data());  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
   const uint8_t *end = input + utf8.size();
 
   __m256i mask_1 = _mm256_set1_epi8(static_cast<char>(0x80));
 
-  auto throw_invalid_utf8 = []() { throw std::runtime_error("Invalid UTF-8 sequence encountered"); };
-
   while (input + 32 <= end)
   {
-    __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(input));
-    uint32_t ascii_mask = static_cast<uint32_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_and_si256(chunk, mask_1), _mm256_setzero_si256())));
+    __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(input));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+    auto ascii_mask = static_cast<uint32_t>(_mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_and_si256(chunk, mask_1), _mm256_setzero_si256())));
 
     if (ascii_mask == 0xFFFFFFFF)
     {
@@ -716,8 +753,8 @@ auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
       utf32.resize(current_size + 32);
       char32_t *output = &utf32[current_size];
 
-      _mm_storeu_si128(reinterpret_cast<__m128i *>(output), _mm256_castsi256_si128(chunk));
-      _mm_storeu_si128(reinterpret_cast<__m128i *>(output + 16), _mm256_extracti128_si256(chunk, 1));
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(output), _mm256_castsi256_si128(chunk));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+      _mm_storeu_si128(reinterpret_cast<__m128i *>(output + 16), _mm256_extracti128_si256(chunk, 1));  // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
       input += 32;
     }
@@ -740,40 +777,54 @@ auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
 
       // Process the first non-ASCII character
       if (input >= end)
-        throw_invalid_utf8();
-      if ((*input & 0xE0) == 0xC0)
       {
-        if (input + 1 >= end || (input[1] & 0xC0) != 0x80)
-          throw_invalid_utf8();
-        uint32_t codepoint = static_cast<uint32_t>(((*input & 0x1F) << 6) | (*(input + 1) & 0x3F));
+        throw std::runtime_error("Invalid UTF-8 sequence");
+      }
+      if ((*input & 0xE0U) == 0xC0U)
+      {
+        if (input + 1 >= end || (input[1] & 0xC0U) != 0x80U)
+        {
+          throw std::runtime_error("Invalid UTF-8 sequence");
+        }
+        auto codepoint = static_cast<uint32_t>(((*input & 0x1FU) << 6U) | (*(input + 1U) & 0x3FU));
         if (codepoint < 0x80)
-          throw_invalid_utf8();  // Overlong encoding
+        {
+          throw std::runtime_error("Invalid UTF-8 sequence");  // Overlong encoding
+        }
         utf32.push_back(codepoint);
         input += 2;
       }
-      else if ((*input & 0xF0) == 0xE0)
+      else if ((*input & 0xF0U) == 0xE0U)
       {
-        if (input + 2 >= end || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80)
-          throw_invalid_utf8();
-        uint32_t codepoint = (static_cast<uint32_t>(*input & 0x0F) << 12) | (static_cast<uint32_t>(*(input + 1) & 0x3F) << 6) | (static_cast<uint32_t>(*(input + 2) & 0x3F));
-        if (codepoint < 0x800 || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
-          throw_invalid_utf8();  // Overlong encoding or surrogate
+        if (input + 2 >= end || (input[1] & 0xC0U) != 0x80U || (input[2] & 0xC0U) != 0x80U)
+        {
+          throw std::runtime_error("Invalid UTF-8 sequence");
+        }
+        auto codepoint = (static_cast<uint32_t>(*input & 0x0FU) << 12U) | (static_cast<uint32_t>(*(input + 1U) & 0x3FU) << 6U) | (static_cast<uint32_t>(*(input + 2) & 0x3FU));
+        if (codepoint < 0x800U || (codepoint >= 0xD800U && codepoint <= 0xDFFFU))
+        {
+          throw std::runtime_error("Invalid UTF-8 sequence");  // Overlong encoding or surrogate
+        }
         utf32.push_back(codepoint);
         input += 3;
       }
-      else if ((*input & 0xF8) == 0xF0)
+      else if ((*input & 0xF8U) == 0xF0U)
       {
-        if (input + 3 >= end || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80 || (input[3] & 0xC0) != 0x80)
-          throw_invalid_utf8();
-        uint32_t codepoint = static_cast<uint32_t>(((*input & 0x07) << 18) | ((*(input + 1) & 0x3F) << 12) | ((*(input + 2) & 0x3F) << 6) | (*(input + 3) & 0x3F));
+        if (input + 3 >= end || (input[1] & 0xC0U) != 0x80U || (input[2] & 0xC0U) != 0x80U || (input[3] & 0xC0U) != 0x80U)
+        {
+          throw std::runtime_error("Invalid UTF-8 sequence");
+        }
+        auto codepoint = static_cast<uint32_t>(((*input & 0x07U) << 18U) | ((*(input + 1) & 0x3FU) << 12U) | ((*(input + 2) & 0x3FU) << 6U) | (*(input + 3) & 0x3FU));
         if (codepoint < 0x10000 || codepoint > 0x10FFFF)
-          throw_invalid_utf8();  // Overlong encoding or out of Unicode range
+        {
+          throw std::runtime_error("Invalid UTF-8 sequence");  // Overlong encoding or out of Unicode range
+        }
         utf32.push_back(codepoint);
         input += 4;
       }
       else
       {
-        throw_invalid_utf8();
+        throw std::runtime_error("Invalid UTF-8 sequence");
       }
     }
   }
@@ -785,41 +836,54 @@ auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
     {
       utf32.push_back(*input++);
     }
-    else if ((*input & 0xE0) == 0xC0)
+    else if ((*input & 0xE0U) == 0xC0U)
     {
-      if (input + 1 >= end || (input[1] & 0xC0) != 0x80)
-        throw_invalid_utf8();
-      uint32_t codepoint = (static_cast<uint32_t>(*input & 0x1F) << 6) | (static_cast<uint32_t>(*(input + 1) & 0x3F));
+      if (input + 1 >= end || (input[1] & 0xC0U) != 0x80U)
+      {
+        throw std::runtime_error("Invalid UTF-8 sequence");
+      }
+      auto codepoint = (static_cast<uint32_t>(*input & 0x1FU) << 6U) | (static_cast<uint32_t>(*(input + 1) & 0x3FU));
       if (codepoint < 0x80)
-        throw_invalid_utf8();  // Overlong encoding
+      {
+        throw std::runtime_error("Invalid UTF-8 sequence");  // Overlong encoding
+      }
       utf32.push_back(codepoint);
       input += 2;
     }
-    else if ((*input & 0xF0) == 0xE0)
+    else if ((*input & 0xF0U) == 0xE0U)
     {
-      if (input + 2 >= end || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80)
-        throw_invalid_utf8();
-      uint32_t codepoint = (static_cast<uint32_t>(*reinterpret_cast<const uint8_t *>(input) & 0x0F) << 12)
-        | (static_cast<uint32_t>(*reinterpret_cast<const uint8_t *>(input + 1) & 0x3F) << 6) | (static_cast<uint32_t>(*reinterpret_cast<const uint8_t *>(input + 2) & 0x3F));
+      if (input + 2 >= end || (input[1] & 0xC0U) != 0x80U || (input[2] & 0xC0U) != 0x80U)
+      {
+        throw std::runtime_error("Invalid UTF-8 sequence");
+      }
+      auto codepoint = (static_cast<uint32_t>(*reinterpret_cast<const uint8_t *>(input) & 0x0FU) << 12U) // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+        | (static_cast<uint32_t>(*reinterpret_cast<const uint8_t *>(input + 1) & 0x3FU) << 6U) | (static_cast<uint32_t>(*reinterpret_cast<const uint8_t *>(input + 2) & 0x3FU)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
       if (codepoint < 0x800 || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
-        throw_invalid_utf8();  // Overlong encoding or surrogate
+      {
+        throw std::runtime_error("Invalid UTF-8 sequence");  // Overlong encoding or surrogate
+      }
       utf32.push_back(codepoint);
       input += 3;
     }
-    else if ((*input & 0xF8) == 0xF0)
+    else if ((*input & 0xF8U) == 0xF0U)
     {
-      if (input + 3 >= end || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80 || (input[3] & 0xC0) != 0x80)
-        throw_invalid_utf8();
-      uint32_t codepoint = (static_cast<uint32_t>(*input & 0x07) << 18) | (static_cast<uint32_t>(*(input + 1) & 0x3F) << 12) | (static_cast<uint32_t>(*(input + 2) & 0x3F) << 6) | (static_cast<uint32_t>(*(input + 3) & 0x3F));
-      if (codepoint < 0x10000 || codepoint > 0x10FFFF)
-        throw_invalid_utf8();  // Overlong encoding or out of Unicode range
+      if (input + 3 >= end || (input[1] & 0xC0U) != 0x80U || (input[2] & 0xC0U) != 0x80U || (input[3] & 0xC0U) != 0x80U)
+      {
+        throw std::runtime_error("Invalid UTF-8 sequence");
+      }
+      uint32_t codepoint = (static_cast<uint32_t>(*input & 0x07U) << 18U) | (static_cast<uint32_t>(*(input + 1) & 0x3FU) << 12U) | (static_cast<uint32_t>(*(input + 2) & 0x3FU) << 6U)
+        | (static_cast<uint32_t>(*(input + 3) & 0x3FU));
+      if (codepoint < 0x10000 || codepoint > 0x10FFFFU)
+      {
+        throw std::runtime_error("Invalid UTF-8 sequence");  // Overlong encoding or out of Unicode range
+      }
       utf32.push_back(codepoint);
       input += 4;
     }
     else
     {
-      throw_invalid_utf8();
+      throw std::runtime_error("Invalid UTF-8 sequence");
     }
   }
 
@@ -836,13 +900,13 @@ auto converter::utf32_to_utf8_avx2(const std::u32string &utf32) -> std::string
   size_t i = 0;
   for (; i + 8 <= len; i += 8)
   {
-    __m256i codepoints = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src + i));
+    __m256i codepoints = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src + i)); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 
     // Check for invalid codepoints
     __m256i invalid = _mm256_or_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0x10FFFF)),
                                       _mm256_and_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0xD7FF)), _mm256_cmpgt_epi32(_mm256_set1_epi32(0xE000), codepoints)));
 
-    if (!_mm256_testz_si256(invalid, invalid))
+    if (_mm256_testz_si256(invalid, invalid) == 0)
     {
       throw std::runtime_error("Invalid UTF-32 codepoint detected");
     }
@@ -874,21 +938,21 @@ auto converter::utf32_to_utf8_avx2(const std::u32string &utf32) -> std::string
       }
       else if (codepoint <= 0x7FF)
       {
-        *dst++ = static_cast<char>(0xC0 | (codepoint >> 6));
-        *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *dst++ = static_cast<char>(0xC0U | (codepoint >> 6U));
+        *dst++ = static_cast<char>(0x80U | (codepoint & 0x3FU));
       }
       else if (codepoint <= 0xFFFF)
       {
-        *dst++ = static_cast<char>(0xE0 | (codepoint >> 12));
-        *dst++ = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-        *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *dst++ = static_cast<char>(0xE0U | (codepoint >> 12U));
+        *dst++ = static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3FU));
+        *dst++ = static_cast<char>(0x80U | (codepoint & 0x3FU));
       }
       else
       {
-        *dst++ = static_cast<char>(0xF0 | (codepoint >> 18));
-        *dst++ = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
-        *dst++ = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-        *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *dst++ = static_cast<char>(0xF0U | (codepoint >> 18U));
+        *dst++ = static_cast<char>(0x80U | ((codepoint >> 12U) & 0x3FU));
+        *dst++ = static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3FU));
+        *dst++ = static_cast<char>(0x80U | (codepoint & 0x3FU));
       }
     }
   }
@@ -907,21 +971,21 @@ auto converter::utf32_to_utf8_avx2(const std::u32string &utf32) -> std::string
     }
     else if (codepoint <= 0x7FF)
     {
-      utf8 += static_cast<char>(0xC0 | (codepoint >> 6));
-      utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
+      utf8 += static_cast<char>(0xC0U | (codepoint >> 6U));
+      utf8 += static_cast<char>(0x80U | (codepoint & 0x3FU));
     }
     else if (codepoint <= 0xFFFF)
     {
-      utf8 += static_cast<char>(0xE0 | (codepoint >> 12));
-      utf8 += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-      utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
+      utf8 += static_cast<char>(0xE0U | (codepoint >> 12U));
+      utf8 += static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3FU));
+      utf8 += static_cast<char>(0x80U | (codepoint & 0x3FU));
     }
     else
     {
-      utf8 += static_cast<char>(0xF0 | (codepoint >> 18));
-      utf8 += static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
-      utf8 += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-      utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
+      utf8 += static_cast<char>(0xF0U | (codepoint >> 18U));
+      utf8 += static_cast<char>(0x80U | ((codepoint >> 12U) & 0x3FU));
+      utf8 += static_cast<char>(0x80U | ((codepoint >> 6U) & 0x3FU));
+      utf8 += static_cast<char>(0x80U | (codepoint & 0x3FU));
     }
   }
 
@@ -1520,7 +1584,7 @@ auto converter::utf32_to_utf8_fallback(const std::u32string &utf32) -> std::stri
 
 #endif
 
-std::u16string converter::utf8_to_utf16(const std::string &utf8)
+auto converter::utf8_to_utf16(const std::string &utf8) -> std::u16string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf8_to_utf16_avx2(utf8);
@@ -1533,7 +1597,7 @@ std::u16string converter::utf8_to_utf16(const std::string &utf8)
 #endif
 }
 
-std::string converter::utf16_to_utf8(const std::u16string &utf16)
+auto converter::utf16_to_utf8(const std::u16string &utf16) -> std::string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf16_to_utf8_avx2(utf16);
@@ -1546,7 +1610,7 @@ std::string converter::utf16_to_utf8(const std::u16string &utf16)
 #endif
 }
 
-std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
+auto converter::utf16_to_utf32(const std::u16string &utf16) -> std::u32string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf16_to_utf32_avx2(utf16);
@@ -1559,7 +1623,7 @@ std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
 #endif
 }
 
-std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
+auto converter::utf32_to_utf16(const std::u32string &utf32) -> std::u16string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf32_to_utf16_avx2(utf32);
@@ -1572,7 +1636,7 @@ std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
 #endif
 }
 
-std::u32string converter::utf8_to_utf32(const std::string &utf8)
+auto converter::utf8_to_utf32(const std::string &utf8) -> std::u32string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf8_to_utf32_avx2(utf8);
@@ -1585,7 +1649,7 @@ std::u32string converter::utf8_to_utf32(const std::string &utf8)
 #endif
 }
 
-std::string converter::utf32_to_utf8(const std::u32string &utf32)
+auto converter::utf32_to_utf8(const std::u32string &utf32) -> std::string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf32_to_utf8_avx2(utf32);
@@ -1598,27 +1662,25 @@ std::string converter::utf32_to_utf8(const std::u32string &utf32)
 #endif
 }
 
-std::wstring converter::utf8_to_wide(const std::string &utf8)
+auto converter::utf8_to_wide(const std::string &utf8) -> std::wstring
 {
 #if defined(SOCI_WCHAR_T_IS_WIDE)  // Windows
   // Convert UTF-8 to UTF-32 first and then to wstring (UTF-32 on Unix/Linux)
   std::u32string utf32 = utf8_to_utf32(utf8);
-  return std::wstring(utf32.begin(), utf32.end());
+  return {utf32.begin(), utf32.end()};
 #else  // Unix/Linux and others
   std::u16string utf16 = utf8_to_utf16(utf8);
-  return std::wstring(utf16.begin(), utf16.end());
+  return {utf16.begin(), utf16.end()};
 #endif  // SOCI_WCHAR_T_IS_WIDE
 }
 
-std::string converter::wide_to_utf8(const std::wstring &wide)
+auto converter::wide_to_utf8(const std::wstring &wide) -> std::string
 {
 #if defined(SOCI_WCHAR_T_IS_WIDE)  // Windows
   // Convert wstring (UTF-32) to utf8
-  std::u32string utf32(wide.begin(), wide.end());
-  return utf32_to_utf8(utf32);
+  return utf32_to_utf8({wide.begin(), wide.end()});
 #else  // Unix/Linux and others
-  std::u16string utf16(wide.begin(), wide.end());
-  return utf16_to_utf8(utf16);
+  return utf16_to_utf8({wide.begin(), wide.end()});
 #endif  // SOCI_WCHAR_T_IS_WIDE
 }
 

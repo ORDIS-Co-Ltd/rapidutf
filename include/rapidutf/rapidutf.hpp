@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include <wchar.h>
+#include <cwchar>
 
 #if WCHAR_MAX > 0xFFFFu
 #  define SOCI_WCHAR_T_IS_WIDE
