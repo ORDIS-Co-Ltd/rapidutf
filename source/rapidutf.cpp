@@ -45,18 +45,38 @@ auto converter::is_valid_utf8_sequence(const unsigned char *bytes, int length) -
   }
   if (length == 2)
   {
-    return (bytes[0] & 0xE0U) == 0xC0 && (bytes[1] & 0xC0U) == 0x80;
+    if ((bytes[0] & 0xE0U) == 0xC0 && (bytes[1] & 0xC0U) == 0x80)
+    {
+      // Check for overlong encoding
+      const uint32_t code_point = ((bytes[0] & 0x1FU) << 6U) | (bytes[1] & 0x3FU);
+      return code_point >= 0x80;
+    }
+    return false;
   }
   if (length == 3)
   {
-    return (bytes[0] & 0xF0U) == 0xE0 && (bytes[1] & 0xC0U) == 0x80 && (bytes[2] & 0xC0U) == 0x80;
+    if ((bytes[0] & 0xF0U) == 0xE0 && (bytes[1] & 0xC0U) == 0x80 && (bytes[2] & 0xC0U) == 0x80)
+    {
+      // Check for overlong encoding
+      const uint32_t code_point = ((bytes[0] & 0x0FU) << 12U) | ((bytes[1] & 0x3FU) << 6U) | (bytes[2] & 0x3FU);
+      return code_point >= 0x800 && code_point <= 0xFFFF;
+    }
+    return false;
   }
   if (length == 4)
   {
-    return (bytes[0] & 0xF8U) == 0xF0 && (bytes[1] & 0xC0U) == 0x80 && (bytes[2] & 0xC0U) == 0x80 && (bytes[3] & 0xC0U) == 0x80;
+    if ((bytes[0] & 0xF8U) == 0xF0 && (bytes[1] & 0xC0U) == 0x80 && (bytes[2] & 0xC0U) == 0x80 && (bytes[3] & 0xC0U) == 0x80)
+    {
+      // Check for overlong encoding and valid Unicode code point
+      const uint32_t code_point = ((bytes[0] & 0x07U) << 18U) | ((bytes[1] & 0x3FU) << 12U) | ((bytes[2] & 0x3FU) << 6U) | (bytes[3] & 0x3FU);
+      return code_point >= 0x10000 && code_point <= 0x10FFFF;
+    }
+    return false;
   }
   return false;
 }
+
+
 
 auto converter::is_valid_utf8(const std::string &utf8) -> bool
 {
