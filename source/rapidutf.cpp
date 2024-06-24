@@ -491,7 +491,7 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
 
 auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 {
-    std::string result;
+ std::string result;
     result.reserve(utf16.length() * 3); // Reserve max possible size
 
     const char16_t* src = utf16.data();
@@ -579,74 +579,64 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 
 auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string
 {
-  // Be careful with handling edge cases and end of the string vectors
-  size_t input_size = utf16.size();
-  std::vector<char32_t> output;
-  output.reserve(input_size);
+    std::u32string utf32;
+    utf32.reserve(utf16.size());
 
-  const __m256i v_high_surrogate_start = _mm256_set1_epi16(0xD800);
-  const __m256i v_high_surrogate_end = _mm256_set1_epi16(0xDBFF);
-  const __m256i v_low_surrogate_start = _mm256_set1_epi16(0xDC00);
-  const __m256i v_low_surrogate_end = _mm256_set1_epi16(0xDFFF);
+    const char16_t *input = utf16.data();
+    const size_t length = utf16.size();
 
-  size_t i = 0;
-  while (i < input_size)
-  {
-    int elements = input_size - i >= 16 ? 16 : input_size - i;
-    __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(&utf16[i]));
+    char32_t buffer[16];
+    size_t i = 0;
 
-    __m256i is_high_surrogate = _mm256_and_si256(_mm256_cmpgt_epi16(input, _mm256_sub_epi16(v_high_surrogate_start, _mm256_set1_epi16(1))),
-                                                 _mm256_cmpgt_epi16(_mm256_add_epi16(v_high_surrogate_end, _mm256_set1_epi16(1)), input));
-    __m256i is_low_surrogate = _mm256_and_si256(_mm256_cmpgt_epi16(input, _mm256_sub_epi16(v_low_surrogate_start, _mm256_set1_epi16(1))),
-                                                _mm256_cmpgt_epi16(_mm256_add_epi16(v_low_surrogate_end, _mm256_set1_epi16(1)), input));
+    for (; i + 15 < length; i += 16) {
+        __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(input + i));
 
-    int high_mask = _mm256_movemask_epi8(_mm256_slli_epi16(is_high_surrogate, 8));
-    int low_mask = _mm256_movemask_epi8(_mm256_slli_epi16(is_low_surrogate, 8));
+        // Check for surrogates
+        __m256i surr_mask = _mm256_set1_epi16(0xF800);
+        __m256i surr_test = _mm256_set1_epi16(0xD800);
+        __m256i is_surrogate = _mm256_cmpeq_epi16(_mm256_and_si256(data, surr_mask), surr_test);
+        uint32_t mask = _mm256_movemask_epi8(is_surrogate);
 
-    if (high_mask || low_mask)
-    {  // If there are any surrogates
-      for (int j = 0; j < elements; ++j)
-      {
-        char16_t current = utf16[i + j];
-        if (current >= 0xD800 && current <= 0xDBFF)
-        {  // High surrogate
-          if (j + 1 < elements)
-          {
-            char16_t next = utf16[i + j + 1];
-            if (next >= 0xDC00 && next <= 0xDFFF)
-            {
-              output.push_back(0x10000 + ((current - 0xD800) << 10) + (next - 0xDC00));
-              j++;  // Skip next character as it's part of surrogate pair
-              continue;
+        if (mask == 0) {
+            // No surrogates: we can safely expand directly to UTF-32
+            __m256i low = _mm256_unpacklo_epi16(data, _mm256_setzero_si256());
+            __m256i high = _mm256_unpackhi_epi16(data, _mm256_setzero_si256());
+
+            _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer), low);
+            _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer + 8), high);
+            utf32.insert(utf32.end(), buffer, buffer + 16);
+        } else {
+            // Handle surrogates and irregular data with scalar approach
+            for (int j = 0; j < 16; ++j) {
+                uint16_t part = input[i + j];
+                if (part < 0xD800 || part > 0xDFFF) {
+                    utf32.push_back(part);
+                } else if ((part >= 0xD800 && part <= 0xDBFF) && (i + j + 1 < length) &&
+                           (input[i + j + 1] >= 0xDC00 && input[i + j + 1] <= 0xDFFF)) {
+                    uint32_t surrogate_pair = (part - 0xD800) << 10;
+                    surrogate_pair += input[i + j + 1] - 0xDC00 + 0x10000;
+                    utf32.push_back(surrogate_pair);
+                    j++; // skip the next code unit
+                }
             }
-            else
-            {
-              throw std::runtime_error("Invalid UTF-16 sequence: high surrogate not followed by low surrogate.");
-            }
-          }
-          else
-          {
-            throw std::runtime_error("Invalid UTF-16 sequence: high surrogate at end of string.");
-          }
         }
-        else if (!(current < 0xD800 || current > 0xDFFF))
-        {
-          throw std::runtime_error("Invalid UTF-16 sequence: low surrogate without preceding high surrogate.");
+    }
+
+    // Handle any leftover characters that didn't fit into a 16-character block
+    for (; i < length; i++) {
+        uint16_t part = input[i];
+        if (part < 0xD800 || part > 0xDFFF) {
+            utf32.push_back(part);
+        } else if ((part >= 0xD800 && part <= 0xDBFF) && (i + 1 < length) &&
+                   (input[i + 1] >= 0xDC00 && input[i + 1] <= 0xDFFF)) {
+            uint32_t surrogate_pair = (part - 0xD800) << 10;
+            surrogate_pair += input[i + 1] - 0xDC00 + 0x10000;
+            utf32.push_back(surrogate_pair);
+            i++; // skip the next code unit
         }
-        output.push_back(current);
-      }
     }
-    else
-    {
-      // Fast path conversion for non-surrogate-containing blocks
-      for (int j = 0; j < elements; ++j)
-      {
-        output.push_back(utf16[i + j]);
-      }
-    }
-    i += elements;
-  }
-  return std::u32string(output.begin(), output.end());
+
+    return utf32;
 }
 
 auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16string
