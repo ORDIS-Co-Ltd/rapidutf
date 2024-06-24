@@ -491,8 +491,8 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
 
 auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 {
-  std::string result;
-  result.reserve(utf16.length() * 3);  // Reserve max possible size
+  std::string utf8;
+  utf8.reserve(utf16.length() * 3);  // Reserve max possible size
 
   const char16_t *src = utf16.data();
   size_t len = utf16.length();
@@ -525,7 +525,7 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
       _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer), output);
 
       size_t output_size = 16 + _mm256_movemask_epi8(mask1) + _mm256_movemask_epi8(mask2);
-      result.append(buffer, output_size);
+      utf8.append(buffer, output_size);
 
       src += 16;
       len -= 16;
@@ -538,55 +538,9 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
   }
 
   // Handle remaining characters
-  while (len > 0)
-  {
-    char16_t ch = *src++;
-    --len;
-
-    if (ch <= 0x7F)
-    {
-      result.push_back(static_cast<char>(ch));
-    }
-    else if (ch <= 0x7FF)
-    {
-      result.push_back(static_cast<char>(0xC0 | (ch >> 6)));
-      result.push_back(static_cast<char>(0x80 | (ch & 0x3F)));
-    }
-    else if (ch >= 0xD800 && ch <= 0xDBFF)
-    {
-      if (len == 0)
-      {
-        throw std::runtime_error("Invalid UTF-16: Unexpected high surrogate");
-      }
-      char16_t low = *src;
-      if (low >= 0xDC00 && low <= 0xDFFF)
-      {
-        uint32_t codepoint = 0x10000 + ((ch - 0xD800) << 10) + (low - 0xDC00);
-        result.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
-        result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-        result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-        result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
-        ++src;
-        --len;
-      }
-      else
-      {
-        throw std::runtime_error("Invalid UTF-16: Unexpected low surrogate");
-      }
-    }
-    else if (ch >= 0xDC00 && ch <= 0xDFFF)
-    {
-      throw std::runtime_error("Invalid UTF-16: Unexpected low surrogate");
-    }
-    else
-    {
-      result.push_back(static_cast<char>(0xE0 | (ch >> 12)));
-      result.push_back(static_cast<char>(0x80 | ((ch >> 6) & 0x3F)));
-      result.push_back(static_cast<char>(0x80 | (ch & 0x3F)));
-    }
-  }
-
-  return result;
+  utf16_to_utf8_common(utf16.data(), len, utf8);
+  
+  return utf8;
 }
 
 auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string
