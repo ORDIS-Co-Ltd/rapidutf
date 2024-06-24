@@ -12,7 +12,8 @@
 #endif
 
 
-#undef RAPIDUTF_USE_NEON
+// #undef RAPIDUTF_USE_NEON
+// #undef RAPIDUTF_USE_AVX2
 
 namespace rapidutf
 {
