@@ -27,6 +27,7 @@ target_link_libraries(
 target_include_directories(rapidutf_benchmark PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_compile_features(rapidutf_benchmark PRIVATE cxx_std_17)
+set_target_properties(rapidutf_benchmark PROPERTIES CXX_CLANG_TIDY "")
 
 # ---- End-of-file commands ----
 
