@@ -1,3 +1,4 @@
+#include <array>
 #include <string>
 
 #include "rapidutf/rapidutf.hpp"
@@ -14,6 +15,50 @@
 
 namespace rapidutf
 {
+
+constexpr std::array<std::array<uint8_t, 32>, 256> generate_ascii_shuffle_table()
+{
+  std::array<std::array<uint8_t, 32>, 256> table {};
+  for (int mask = 0; mask < 256; ++mask)
+  {
+    int idx = 0;
+    for (int i = 0; i < 8; ++i)
+    {
+      if (mask & (1 << i))
+      {
+        table[mask][idx++] = i;
+      }
+    }
+    for (int i = 0; i < 8; ++i)
+    {
+      if (mask & (1 << i))
+      {
+        table[mask][idx++] = i + 8;
+      }
+    }
+    for (int i = 0; i < 8; ++i)
+    {
+      if (mask & (1 << i))
+      {
+        table[mask][idx++] = i + 16;
+      }
+    }
+    for (int i = 0; i < 8; ++i)
+    {
+      if (mask & (1 << i))
+      {
+        table[mask][idx++] = i + 24;
+      }
+    }
+    for (; idx < 32; ++idx)
+    {
+      table[mask][idx] = 0x80;  // Padding
+    }
+  }
+  return table;
+}
+
+const auto ascii_shuffle_table = generate_ascii_shuffle_table();
 
 auto converter::is_valid_utf8_sequence(const unsigned char *bytes, int length) -> bool
 {
@@ -495,119 +540,147 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 
 auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string
 {
-const size_t input_size = utf16.size();
-    std::vector<char32_t> output;
-    output.reserve(input_size); // Reserve space for worst-case scenario
+  // Be careful with handling edge cases and end of the string vectors
+  size_t input_size = utf16.size();
+  std::vector<char32_t> output;
+  output.reserve(input_size);
 
-    const __m256i surrogate_min = _mm256_set1_epi16(0xD800);
-    const __m256i surrogate_max = _mm256_set1_epi16(0xDFFF);
-    const __m256i high_surrogate_max = _mm256_set1_epi16(0xDBFF);
+  const __m256i v_high_surrogate_start = _mm256_set1_epi16(0xD800);
+  const __m256i v_high_surrogate_end = _mm256_set1_epi16(0xDBFF);
+  const __m256i v_low_surrogate_start = _mm256_set1_epi16(0xDC00);
+  const __m256i v_low_surrogate_end = _mm256_set1_epi16(0xDFFF);
 
-    size_t i = 0;
-    while (i < input_size) {
-        if (i + 16 <= input_size) {
-            __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&utf16[i]));
-            
-            // Check for surrogates
-            __m256i is_surrogate = _mm256_and_si256(
-                _mm256_cmpgt_epi16(input, surrogate_min),
-                _mm256_cmpgt_epi16(surrogate_max, input)
-            );
+  size_t i = 0;
+  while (i < input_size)
+  {
+    int elements = input_size - i >= 16 ? 16 : input_size - i;
+    __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(&utf16[i]));
 
-            int surrogate_mask = _mm256_movemask_epi8(is_surrogate);
-            if (surrogate_mask == 0) {
-                // No surrogates, simple conversion
-                __m256i utf32_low = _mm256_cvtepu16_epi32(_mm256_extracti128_si256(input, 0));
-                __m256i utf32_high = _mm256_cvtepu16_epi32(_mm256_extracti128_si256(input, 1));
+    __m256i is_high_surrogate = _mm256_and_si256(_mm256_cmpgt_epi16(input, _mm256_sub_epi16(v_high_surrogate_start, _mm256_set1_epi16(1))),
+                                                 _mm256_cmpgt_epi16(_mm256_add_epi16(v_high_surrogate_end, _mm256_set1_epi16(1)), input));
+    __m256i is_low_surrogate = _mm256_and_si256(_mm256_cmpgt_epi16(input, _mm256_sub_epi16(v_low_surrogate_start, _mm256_set1_epi16(1))),
+                                                _mm256_cmpgt_epi16(_mm256_add_epi16(v_low_surrogate_end, _mm256_set1_epi16(1)), input));
 
-                _mm256_storeu_si256(reinterpret_cast<__m256i*>(&output[output.size()]), utf32_low);
-                _mm256_storeu_si256(reinterpret_cast<__m256i*>(&output[output.size() + 8]), utf32_high);
+    int high_mask = _mm256_movemask_epi8(_mm256_slli_epi16(is_high_surrogate, 8));
+    int low_mask = _mm256_movemask_epi8(_mm256_slli_epi16(is_low_surrogate, 8));
 
-                output.resize(output.size() + 16);
-                i += 16;
-            } else {
-                // Handle surrogate pairs
-                for (int j = 0; j < 16; ++j) {
-                    char16_t high = utf16[i];
-                    if (high >= 0xD800 && high <= 0xDBFF && i + 1 < input_size) {
-                        char16_t low = utf16[i + 1];
-                        if (low >= 0xDC00 && low <= 0xDFFF) {
-                            char32_t codepoint = 0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00);
-                            output.push_back(codepoint);
-                            i += 2;
-                        } else {
-                            output.push_back(high);
-                            ++i;
-                        }
-                    } else {
-                        output.push_back(high);
-                        ++i;
-                    }
-                    if (i >= input_size) break;
-                }
+    if (high_mask || low_mask)
+    {  // If there are any surrogates
+      for (int j = 0; j < elements; ++j)
+      {
+        char16_t current = utf16[i + j];
+        if (current >= 0xD800 && current <= 0xDBFF)
+        {  // High surrogate
+          if (j + 1 < elements)
+          {
+            char16_t next = utf16[i + j + 1];
+            if (next >= 0xDC00 && next <= 0xDFFF)
+            {
+              output.push_back(0x10000 + ((current - 0xD800) << 10) + (next - 0xDC00));
+              j++;  // Skip next character as it's part of surrogate pair
+              continue;
             }
-        } else {
-            // Handle remaining characters
-            char16_t high = utf16[i];
-            if (high >= 0xD800 && high <= 0xDBFF && i + 1 < input_size) {
-                char16_t low = utf16[i + 1];
-                if (low >= 0xDC00 && low <= 0xDFFF) {
-                    char32_t codepoint = 0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00);
-                    output.push_back(codepoint);
-                    i += 2;
-                } else {
-                    output.push_back(high);
-                    ++i;
-                }
-            } else {
-                output.push_back(high);
-                ++i;
+            else
+            {
+              throw std::runtime_error("Invalid UTF-16 sequence: high surrogate not followed by low surrogate.");
             }
+          }
+          else
+          {
+            throw std::runtime_error("Invalid UTF-16 sequence: high surrogate at end of string.");
+          }
         }
+        else if (!(current < 0xD800 || current > 0xDFFF))
+        {
+          throw std::runtime_error("Invalid UTF-16 sequence: low surrogate without preceding high surrogate.");
+        }
+        output.push_back(current);
+      }
     }
-
-    return std::u32string(output.begin(), output.end());
+    else
+    {
+      // Fast path conversion for non-surrogate-containing blocks
+      for (int j = 0; j < elements; ++j)
+      {
+        output.push_back(utf16[i + j]);
+      }
+    }
+    i += elements;
+  }
+  return std::u32string(output.begin(), output.end());
 }
 
 auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16string
 {
   std::u16string utf16;
-  utf16.reserve(utf32.size() * 2);  // Maximum possible size (all surrogate pairs)
+  utf16.reserve(utf32.size());
 
-  const char32_t *chars = utf32.data();
-  std::size_t length = utf32.length();
+  const uint32_t *src = reinterpret_cast<const uint32_t *>(utf32.data());
+  size_t len = utf32.size();
 
-  for (std::size_t i = 0; i < length;)
+  while (len > 0)
   {
-    if (length - i >= 8)
+    if (len >= 8)
     {
-      __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(chars + i));
-      __m256i mask = _mm256_set1_epi32(0xFFFF);
-      __m256i result = _mm256_cmpgt_epi32(chunk, mask);
-      int bitfield = _mm256_movemask_ps(_mm256_castsi256_ps(result));
+      __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src));
 
-      if (bitfield == 0)
+      // Check if all code points are valid (0 <= x <= 0x10FFFF, excluding surrogates)
+      __m256i too_large = _mm256_cmpgt_epi32(input, _mm256_set1_epi32(0x10FFFF));
+      __m256i surrogate_range = _mm256_and_si256(_mm256_cmpgt_epi32(input, _mm256_set1_epi32(0xD7FF)), _mm256_cmpgt_epi32(_mm256_set1_epi32(0xE000), input));
+      __m256i invalid_mask = _mm256_or_si256(too_large, surrogate_range);
+
+      if (_mm256_movemask_ps(_mm256_castsi256_ps(invalid_mask)) != 0)
       {
-        // All characters in the chunk are BMP characters
-        for (std::size_t j = 0; j < 8; ++j)
-        {
-          utf16.push_back(static_cast<char16_t>(chars[i + j]));
-        }
-        i += 8;
+        throw std::runtime_error("Invalid UTF-32 input");
+      }
+
+      // Check if all code points are below 0x10000
+      __m256i mask = _mm256_cmpgt_epi32(input, _mm256_set1_epi32(0xFFFF));
+      int maskResult = _mm256_movemask_ps(_mm256_castsi256_ps(mask));
+
+      if (maskResult == 0)
+      {
+        // All code points are below 0x10000, direct conversion
+        __m128i low = _mm256_castsi256_si128(input);
+        __m128i high = _mm256_extracti128_si256(input, 1);
+        __m128i result = _mm_packus_epi32(low, high);
+
+        char16_t buffer[8];
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(buffer), result);
+        utf16.append(buffer, 8);
+
+        src += 8;
+        len -= 8;
       }
       else
       {
-        // Handle non-BMP characters with AVX
-        // ... (AVX specific code)
-        // For simplicity, let's assume we handle the non-BMP part here and then call the common function
-        utf32_to_utf16_common(chars + i, length - i, utf16);
+        // Some code points are above 0xFFFF, handle individually
         break;
       }
     }
     else
     {
-      utf32_to_utf16_common(chars + i, length - i, utf16);
       break;
+    }
+  }
+
+  // Handle remaining characters
+  for (; len > 0; --len, ++src)
+  {
+    uint32_t codepoint = *src;
+    if (codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
+    {
+      throw std::runtime_error("Invalid UTF-32 input");
+    }
+    if (codepoint <= 0xFFFF)
+    {
+      utf16.push_back(static_cast<char16_t>(codepoint));
+    }
+    else
+    {
+      codepoint -= 0x10000;
+      utf16.push_back(static_cast<char16_t>((codepoint >> 10) + 0xD800));
+      utf16.push_back(static_cast<char16_t>((codepoint & 0x3FF) + 0xDC00));
     }
   }
 
@@ -617,42 +690,129 @@ auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16stri
 auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
 {
   std::u32string utf32;
-  utf32.reserve(utf8.size());
+  utf32.reserve(utf8.size());  // Reserve space for worst case scenario
 
-  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
-  std::size_t length = utf8.length();
+  const uint8_t *input = reinterpret_cast<const uint8_t *>(utf8.data());
+  const uint8_t *end = input + utf8.size();
 
-  for (std::size_t i = 0; i < length;)
+  __m256i mask_1 = _mm256_set1_epi8(0x80);
+
+  auto throw_invalid_utf8 = []() { throw std::runtime_error("Invalid UTF-8 sequence encountered"); };
+
+  while (input + 32 <= end)
   {
-    if (length - i >= 32)
-    {
-      __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(bytes + i));
-      __m256i mask = _mm256_set1_epi8(static_cast<char>(0x80));
-      __m256i result = _mm256_cmpeq_epi8(_mm256_and_si256(chunk, mask), _mm256_setzero_si256());
-      int bitfield = _mm256_movemask_epi8(result);
+    __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(input));
+    uint32_t ascii_mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_and_si256(chunk, mask_1), _mm256_setzero_si256()));
 
-      if (bitfield == static_cast<int>(0xFFFFFFFF))
-      {
-        // All characters in the chunk are ASCII
-        for (std::size_t j = 0; j < 32; ++j)
-        {
-          utf32.push_back(static_cast<char32_t>(bytes[i + j]));
-        }
-        i += 32;
-      }
-      else
-      {
-        // Handle non-ASCII characters with AVX
-        // ... (AVX specific code)
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
-        utf8_to_utf32_common(bytes + i, length - i, utf32);
-        break;
-      }
+    if (ascii_mask == 0xFFFFFFFF)
+    {
+      // All bytes are ASCII
+      size_t current_size = utf32.size();
+      utf32.resize(current_size + 32);
+      char32_t *output = &utf32[current_size];
+
+      _mm_storeu_si128((__m128i *)output, _mm256_castsi256_si128(chunk));
+      _mm_storeu_si128((__m128i *)(output + 16), _mm256_extracti128_si256(chunk, 1));
+
+      input += 32;
     }
     else
     {
-      utf8_to_utf32_common(bytes + i, length - i, utf32);
-      break;
+      // Process ASCII characters in bulk
+      int ascii_count = __builtin_ctz(~ascii_mask);
+      if (ascii_count > 0)
+      {
+        size_t current_size = utf32.size();
+        utf32.resize(current_size + ascii_count);
+        char32_t *output = &utf32[current_size];
+
+        for (int i = 0; i < ascii_count; ++i)
+        {
+          output[i] = input[i];
+        }
+        input += ascii_count;
+      }
+
+      // Process the first non-ASCII character
+      if (input >= end)
+        throw_invalid_utf8();
+      if ((*input & 0xE0) == 0xC0)
+      {
+        if (input + 1 >= end || (input[1] & 0xC0) != 0x80)
+          throw_invalid_utf8();
+        uint32_t codepoint = ((*input & 0x1F) << 6) | (*(input + 1) & 0x3F);
+        if (codepoint < 0x80)
+          throw_invalid_utf8();  // Overlong encoding
+        utf32.push_back(codepoint);
+        input += 2;
+      }
+      else if ((*input & 0xF0) == 0xE0)
+      {
+        if (input + 2 >= end || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80)
+          throw_invalid_utf8();
+        uint32_t codepoint = ((*input & 0x0F) << 12) | ((*(input + 1) & 0x3F) << 6) | (*(input + 2) & 0x3F);
+        if (codepoint < 0x800 || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
+          throw_invalid_utf8();  // Overlong encoding or surrogate
+        utf32.push_back(codepoint);
+        input += 3;
+      }
+      else if ((*input & 0xF8) == 0xF0)
+      {
+        if (input + 3 >= end || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80 || (input[3] & 0xC0) != 0x80)
+          throw_invalid_utf8();
+        uint32_t codepoint = ((*input & 0x07) << 18) | ((*(input + 1) & 0x3F) << 12) | ((*(input + 2) & 0x3F) << 6) | (*(input + 3) & 0x3F);
+        if (codepoint < 0x10000 || codepoint > 0x10FFFF)
+          throw_invalid_utf8();  // Overlong encoding or out of Unicode range
+        utf32.push_back(codepoint);
+        input += 4;
+      }
+      else
+      {
+        throw_invalid_utf8();
+      }
+    }
+  }
+
+  // Handle remaining bytes
+  while (input < end)
+  {
+    if (*input < 0x80)
+    {
+      utf32.push_back(*input++);
+    }
+    else if ((*input & 0xE0) == 0xC0)
+    {
+      if (input + 1 >= end || (input[1] & 0xC0) != 0x80)
+        throw_invalid_utf8();
+      uint32_t codepoint = ((*input & 0x1F) << 6) | (*(input + 1) & 0x3F);
+      if (codepoint < 0x80)
+        throw_invalid_utf8();  // Overlong encoding
+      utf32.push_back(codepoint);
+      input += 2;
+    }
+    else if ((*input & 0xF0) == 0xE0)
+    {
+      if (input + 2 >= end || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80)
+        throw_invalid_utf8();
+      uint32_t codepoint = ((*input & 0x0F) << 12) | ((*(input + 1) & 0x3F) << 6) | (*(input + 2) & 0x3F);
+      if (codepoint < 0x800 || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
+        throw_invalid_utf8();  // Overlong encoding or surrogate
+      utf32.push_back(codepoint);
+      input += 3;
+    }
+    else if ((*input & 0xF8) == 0xF0)
+    {
+      if (input + 3 >= end || (input[1] & 0xC0) != 0x80 || (input[2] & 0xC0) != 0x80 || (input[3] & 0xC0) != 0x80)
+        throw_invalid_utf8();
+      uint32_t codepoint = ((*input & 0x07) << 18) | ((*(input + 1) & 0x3F) << 12) | ((*(input + 2) & 0x3F) << 6) | (*(input + 3) & 0x3F);
+      if (codepoint < 0x10000 || codepoint > 0x10FFFF)
+        throw_invalid_utf8();  // Overlong encoding or out of Unicode range
+      utf32.push_back(codepoint);
+      input += 4;
+    }
+    else
+    {
+      throw_invalid_utf8();
     }
   }
 
