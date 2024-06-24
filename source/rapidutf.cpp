@@ -34,50 +34,6 @@ static inline int ctz(uint32_t value)
 }
 #endif
 
-constexpr std::array<std::array<uint8_t, 32>, 256> generate_ascii_shuffle_table()
-{
-  std::array<std::array<uint8_t, 32>, 256> table {};
-  for (int mask = 0; mask < 256; ++mask)
-  {
-    int idx = 0;
-    for (int i = 0; i < 8; ++i)
-    {
-      if (mask & (1 << i))
-      {
-        table[mask][idx++] = i;
-      }
-    }
-    for (int i = 0; i < 8; ++i)
-    {
-      if (mask & (1 << i))
-      {
-        table[mask][idx++] = i + 8;
-      }
-    }
-    for (int i = 0; i < 8; ++i)
-    {
-      if (mask & (1 << i))
-      {
-        table[mask][idx++] = i + 16;
-      }
-    }
-    for (int i = 0; i < 8; ++i)
-    {
-      if (mask & (1 << i))
-      {
-        table[mask][idx++] = i + 24;
-      }
-    }
-    for (; idx < 32; ++idx)
-    {
-      table[mask][idx] = 0x80;  // Padding
-    }
-  }
-  return table;
-}
-
-const auto ascii_shuffle_table = generate_ascii_shuffle_table();
-
 auto converter::is_valid_utf8_sequence(const unsigned char *bytes, int length) -> bool
 {
   if (length == 1)
@@ -969,17 +925,6 @@ auto converter::utf32_to_utf8_avx2(const std::u32string &utf32) -> std::string
 
 #elif defined(RAPIDUTF_USE_NEON)
 
-/**
- * @brief Converts a UTF-8 encoded string to a UTF-16 encoded string using NEON intrinsics.
- *
- * This function takes a UTF-8 encoded string as input and converts it to a UTF-16 encoded string.
- * It uses NEON intrinsics for efficient processing of the UTF-8 string. If the input UTF-8 string
- * is not well-formed, the function throws an exception with an appropriate error message.
- *
- * @param utf8 The input UTF-8 encoded string.
- * @return std::u16string The output UTF-16 encoded string.
- * @throws std::runtime_error If the input UTF-8 string is not well-formed.
- */
 auto converter::utf8_to_utf16_neon(const std::string &utf8) -> std::u16string
 {
   std::u16string utf16;
@@ -1026,16 +971,6 @@ auto converter::utf8_to_utf16_neon(const std::string &utf8) -> std::u16string
   return utf16;
 }
 
-/**
- * @brief Converts a UTF-16 encoded string to a UTF-8 encoded string using NEON intrinsics.
- *
- * This function takes a UTF-16 encoded string as input and converts it to a UTF-8 encoded string.
- * It uses NEON intrinsics to optimize the conversion process for ARM architectures.
- *
- * @param utf16 The input UTF-16 encoded string.
- * @return std::string The UTF-8 encoded string.
- * @throw std::runtime_error If the input UTF-16 string is invalid.
- */
 auto converter::utf16_to_utf8_neon(const std::u16string &utf16) -> std::string
 {
   std::string utf8;
@@ -1094,17 +1029,6 @@ auto converter::utf16_to_utf8_neon(const std::u16string &utf16) -> std::string
   return utf8;
 }
 
-/**
- * @brief Converts a UTF-16 encoded string to a UTF-32 encoded string.
- *
- * This function uses NEON intrinsics for ARMv8 processors to optimize the conversion process.
- * It checks if the input UTF-16 string is valid before performing the conversion.
- * If the input string is not valid UTF-16, it throws a std::runtime_error exception.
- *
- * @param utf16 The input UTF-16 encoded string to be converted.
- * @return std::u32string The converted UTF-32 encoded string.
- * @throws std::runtime_error If the input UTF-16 string is not valid.
- */
 auto converter::utf16_to_utf32_neon(const std::u16string &utf16) -> std::u32string
 {
   std::u32string utf32;
@@ -1156,16 +1080,6 @@ auto converter::utf16_to_utf32_neon(const std::u16string &utf16) -> std::u32stri
   return utf32;
 }
 
-/**
- * Converts a UTF-32 encoded string to a UTF-16 encoded string using NEON intrinsics.
- *
- * This function takes a UTF-32 encoded string as input and converts it to a UTF-16 encoded string.
- * It uses the NEON intrinsics for ARM architecture to optimize the conversion process.
- *
- * @param utf32 The input UTF-32 encoded string.
- * @return The converted UTF-16 encoded string.
- * @throws std::runtime_error If the input UTF-32 string contains invalid code points.
- */
 auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16string
 {
   std::u16string utf16;
@@ -1399,13 +1313,6 @@ auto converter::utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16stri
   return utf16;
 }
 
-/**
- * Converts a UTF-8 encoded string to a UTF-32 encoded string using NEON intrinsics.
- *
- * @param utf8 The input UTF-8 encoded string.
- * @return The converted UTF-32 encoded string.
- * @throws std::runtime_error If the input UTF-8 string is invalid or contains an invalid UTF-8 sequence.
- */
 auto converter::utf8_to_utf32_neon(const std::string &utf8) -> std::u32string
 {
   std::u32string utf32;
@@ -1464,16 +1371,6 @@ auto converter::utf8_to_utf32_neon(const std::string &utf8) -> std::u32string
   return utf32;
 }
 
-/**
- * @brief Converts a UTF-32 encoded string to a UTF-8 encoded string using NEON intrinsics.
- *
- * This function takes a UTF-32 encoded string as input and converts it to a UTF-8 encoded string.
- * It uses NEON intrinsics for efficient processing of UTF-32 data.
- *
- * @param utf32 The input UTF-32 encoded string.
- * @return std::string The output UTF-8 encoded string.
- * @throw std::runtime_error If the input UTF-32 string contains invalid code points.
- */
 auto converter::utf32_to_utf8_neon(const std::u32string &utf32) -> std::string
 {
   if (!is_valid_utf32(utf32))
@@ -1528,17 +1425,6 @@ auto converter::utf32_to_utf8_neon(const std::u32string &utf32) -> std::string
 
 #else
 
-/**
- * @brief Converts a UTF-8 encoded string to a UTF-16 encoded string.
- *
- * This function iterates through the input string and converts each UTF-8 sequence into
- * its corresponding UTF-16 code unit(s).
- * If the input string contains invalid UTF-8 encoding, a std::runtime_error exception is thrown.
- *
- * @param utf8 The UTF-8 encoded string.
- * @return std::u16string The UTF-16 encoded string.
- * @throws std::runtime_error if the input string contains invalid UTF-8 encoding.
- */
 auto converter::utf8_to_utf16_fallback(const std::string &utf8) -> std::u16string
 {
   std::u16string utf16;
@@ -1552,17 +1438,6 @@ auto converter::utf8_to_utf16_fallback(const std::string &utf8) -> std::u16strin
   return utf16;
 }
 
-/**
- * @brief Converts a UTF-16 encoded string to a UTF-8 encoded string.
- *
- * This function iterates through the input string and converts each UTF-16 code unit into
- * its corresponding UTF-8 sequence(s).
- * If the input string contains invalid UTF-16 encoding, a std::runtime_error exception is thrown.
- *
- * @param utf16 The UTF-16 encoded string.
- * @return std::string The UTF-8 encoded string.
- * @throws std::runtime_error if the input string contains invalid UTF-16 encoding.
- */
 auto converter::utf16_to_utf8_fallback(const std::u16string &utf16) -> std::string
 {
   std::string utf8;
@@ -1576,17 +1451,6 @@ auto converter::utf16_to_utf8_fallback(const std::u16string &utf16) -> std::stri
   return utf8;
 }
 
-/**
- * @brief Converts a UTF-16 encoded string to a UTF-32 encoded string.
- *
- * This function iterates through the input string and converts each UTF-16 code unit into
- * its corresponding UTF-32 code point(s).
- * If the input string contains invalid UTF-16 encoding, a std::runtime_error exception is thrown.
- *
- * @param utf16 The UTF-16 encoded string.
- * @return std::u32string The UTF-32 encoded string.
- * @throws std::runtime_error if the input string contains invalid UTF-16 encoding.
- */
 auto converter::utf16_to_utf32_fallback(const std::u16string &utf16) -> std::u32string
 {
   std::u32string utf32;
@@ -1600,17 +1464,7 @@ auto converter::utf16_to_utf32_fallback(const std::u16string &utf16) -> std::u32
   return utf32;
 }
 
-/**
- * @brief Converts a UTF-32 encoded string to a UTF-16 encoded string.
- *
- * This function iterates through the input string and converts each UTF-32 code point into
- * its corresponding UTF-16 code unit(s).
- * If the input string contains invalid UTF-32 code points, a std::runtime_error exception is thrown.
- *
- * @param utf32 The UTF-32 encoded string.
- * @return std::u16string The UTF-16 encoded string.
- * @throws std::runtime_error if the input string contains invalid UTF-32 code points.
- */
+
 auto converter::utf32_to_utf16_fallback(const std::u32string &utf32) -> std::u16string
 {
   std::u16string utf16;
@@ -1624,17 +1478,7 @@ auto converter::utf32_to_utf16_fallback(const std::u32string &utf32) -> std::u16
   return utf16;
 }
 
-/**
- * @brief Converts a UTF-8 encoded string to a UTF-32 encoded string.
- *
- * This function iterates through the input string and converts each UTF-8 sequence into
- * its corresponding UTF-32 code point(s).
- * If the input string contains invalid UTF-8 encoding, a std::runtime_error exception is thrown.
- *
- * @param utf8 The UTF-8 encoded string.
- * @return std::u32string The UTF-32 encoded string.
- * @throws std::runtime_error if the input string contains invalid UTF-8 encoding.
- */
+
 auto converter::utf8_to_utf32_fallback(const std::string &utf8) -> std::u32string
 {
   std::u32string utf32;
@@ -1648,17 +1492,6 @@ auto converter::utf8_to_utf32_fallback(const std::string &utf8) -> std::u32strin
   return utf32;
 }
 
-/**
- * @brief Converts a UTF-32 encoded string to a UTF-8 encoded string.
- *
- * This function iterates through the input string and converts each UTF-32 code point into
- * its corresponding UTF-8 sequence(s).
- * If the input string contains invalid UTF-32 code points, a std::runtime_error exception is thrown.
- *
- * @param utf32 The UTF-32 encoded string.
- * @return std::string The UTF-8 encoded string.
- * @throws std::runtime_error if the input string contains invalid UTF-32 code points.
- */
 auto converter::utf32_to_utf8_fallback(const std::u32string &utf32) -> std::string
 {
   if (!is_valid_utf32(utf32))
@@ -1679,20 +1512,6 @@ auto converter::utf32_to_utf8_fallback(const std::u32string &utf32) -> std::stri
 
 #endif
 
-/* Wrappers for the conversion functions that select the appropriate implementation based on
-platform capabilities */
-
-/**
- * @brief Converts a UTF-8 encoded string to a UTF-16 encoded string.
- *
- * This function uses SIMD instructions if available, otherwise it falls back to a standard
- * implementation.
- * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
- *
- * @param utf8 The UTF-8 encoded string.
- * @return std::u16string The UTF-16 encoded string.
- * @throws soci_error if the input string contains invalid UTF-8 encoding.
- */
 std::u16string converter::utf8_to_utf16(const std::string &utf8)
 {
 #if defined(RAPIDUTF_USE_AVX2)
@@ -1706,17 +1525,6 @@ std::u16string converter::utf8_to_utf16(const std::string &utf8)
 #endif
 }
 
-/**
- * @brief Converts a UTF-16 encoded string to a UTF-8 encoded string.
- *
- * This function uses SIMD instructions if available, otherwise it falls back to a standard
- * implementation.
- * If the input string contains invalid UTF-16 encoding, a soci_error exception is thrown.
- *
- * @param utf16 The UTF-16 encoded string.
- * @return std::string The UTF-8 encoded string.
- * @throws soci_error if the input string contains invalid UTF-16 encoding.
- */
 std::string converter::utf16_to_utf8(const std::u16string &utf16)
 {
 #if defined(RAPIDUTF_USE_AVX2)
@@ -1730,17 +1538,6 @@ std::string converter::utf16_to_utf8(const std::u16string &utf16)
 #endif
 }
 
-/**
- * @brief Converts a UTF-16 encoded string to a UTF-32 encoded string.
- *
- * This function uses SIMD instructions if available, otherwise it falls back to a standard
- * implementation.
- * If the input string contains invalid UTF-16 encoding, a soci_error exception is thrown.
- *
- * @param utf16 The UTF-16 encoded string.
- * @return std::u32string The UTF-32 encoded string.
- * @throws soci_error if the input string contains invalid UTF-16 encoding.
- */
 std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
 {
 #if defined(RAPIDUTF_USE_AVX2)
@@ -1754,17 +1551,6 @@ std::u32string converter::utf16_to_utf32(const std::u16string &utf16)
 #endif
 }
 
-/**
- * @brief Converts a UTF-32 encoded string to a UTF-16 encoded string.
- *
- * This function uses SIMD instructions if available, otherwise it falls back to a standard
- * implementation.
- * If the input string contains invalid UTF-32 code points, a soci_error exception is thrown.
- *
- * @param utf32 The UTF-32 encoded string.
- * @return std::u16string The UTF-16 encoded string.
- * @throws soci_error if the input string contains invalid UTF-32 code points.
- */
 std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
 {
 #if defined(RAPIDUTF_USE_AVX2)
@@ -1778,17 +1564,6 @@ std::u16string converter::utf32_to_utf16(const std::u32string &utf32)
 #endif
 }
 
-/**
- * @brief Converts a UTF-8 encoded string to a UTF-32 encoded string.
- *
- * This function uses SIMD instructions if available, otherwise it falls back to a standard
- * implementation.
- * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
- *
- * @param utf8 The UTF-8 encoded string.
- * @return std::u32string The UTF-32 encoded string.
- * @throws soci_error if the input string contains invalid UTF-8 encoding.
- */
 std::u32string converter::utf8_to_utf32(const std::string &utf8)
 {
 #if defined(RAPIDUTF_USE_AVX2)
@@ -1802,17 +1577,6 @@ std::u32string converter::utf8_to_utf32(const std::string &utf8)
 #endif
 }
 
-/**
- * @brief Converts a UTF-32 encoded string to a UTF-8 encoded string.
- *
- * This function uses SIMD instructions if available, otherwise it falls back to a standard
- * implementation.
- * If the input string contains invalid UTF-32 code points, a soci_error exception is thrown.
- *
- * @param utf32 The UTF-32 encoded string.
- * @return std::string The UTF-8 encoded string.
- * @throws soci_error if the input string contains invalid UTF-32 code points.
- */
 std::string converter::utf32_to_utf8(const std::u32string &utf32)
 {
 #if defined(RAPIDUTF_USE_AVX2)
@@ -1826,17 +1590,7 @@ std::string converter::utf32_to_utf8(const std::u32string &utf32)
 #endif
 }
 
-/**
- * @brief Converts a UTF-8 encoded string to a wide string (wstring).
- *
- * This function uses the platform's native wide character encoding. On Windows, this is UTF-16,
- * while on Unix/Linux and other platforms, it is UTF-32 or UTF-8 depending on the system
- * configuration.
- * If the input string contains invalid UTF-8 encoding, a soci_error exception is thrown.
- *
- * @param utf8 The UTF-8 encoded string.
- * @return std::wstring The wide string.
- */
+
 std::wstring converter::utf8_to_wide(const std::string &utf8)
 {
 #if defined(SOCI_WCHAR_T_IS_WIDE)  // Windows
@@ -1849,17 +1603,7 @@ std::wstring converter::utf8_to_wide(const std::string &utf8)
 #endif  // SOCI_WCHAR_T_IS_WIDE
 }
 
-/**
- * @brief Converts a wide string (wstring) to a UTF-8 encoded string.
- *
- * This function uses the platform's native wide character encoding. On Windows, this is UTF-16,
- * while on Unix/Linux and other platforms, it is UTF-32 or UTF-8 depending on the system
- * configuration.
- * If the input string contains invalid wide characters, a soci_error exception is thrown.
- *
- * @param wide The wide string.
- * @return std::string The UTF-8 encoded string.
- */
+
 std::string converter::wide_to_utf8(const std::wstring &wide)
 {
 #if defined(SOCI_WCHAR_T_IS_WIDE)  // Windows
