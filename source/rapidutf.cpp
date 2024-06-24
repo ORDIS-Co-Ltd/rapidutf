@@ -444,7 +444,6 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
   return utf16;
 }
 
-
 auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 {
   std::string utf8;
@@ -465,17 +464,21 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
       if (bitfield == static_cast<int>(0xFFFFFFFF))
       {
         // All characters in the chunk are ASCII
-        for (std::size_t j = 0; j < 16; ++j)
-        {
-          utf8.push_back(static_cast<char>(chars[i + j]));
-        }
+        __m256i shuffled = _mm256_shufflelo_epi16(chunk, _MM_SHUFFLE(3, 1, 2, 0));
+        shuffled = _mm256_shufflehi_epi16(shuffled, _MM_SHUFFLE(3, 1, 2, 0));
+        __m256i ascii_chunk = _mm256_permute4x64_epi64(shuffled, _MM_SHUFFLE(3, 1, 2, 0));
+        __m128i ascii_low = _mm256_castsi256_si128(ascii_chunk);
+        __m128i ascii_high = _mm256_extracti128_si256(ascii_chunk, 1);
+        char *ascii_chars = reinterpret_cast<char *>(&ascii_low);
+        utf8.append(ascii_chars, 8);
+        ascii_chars = reinterpret_cast<char *>(&ascii_high);
+        utf8.append(ascii_chars, 8);
         i += 16;
       }
       else
       {
         // Handle non-ASCII characters with AVX2
         // ... (AVX2 specific code)
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
         utf16_to_utf8_common(chars + i, length - i, utf8);
         break;
       }
@@ -492,48 +495,78 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
 
 auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string
 {
-  std::u32string utf32;
-  utf32.reserve(utf16.size());
+const size_t input_size = utf16.size();
+    std::vector<char32_t> output;
+    output.reserve(input_size); // Reserve space for worst-case scenario
 
-  const char16_t *chars = utf16.data();
-  std::size_t length = utf16.length();
+    const __m256i surrogate_min = _mm256_set1_epi16(0xD800);
+    const __m256i surrogate_max = _mm256_set1_epi16(0xDFFF);
+    const __m256i high_surrogate_max = _mm256_set1_epi16(0xDBFF);
 
-  for (std::size_t i = 0; i < length;)
-  {
-    if (length - i >= 16)
-    {
-      __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(chars + i));
-      __m256i highSurrogateMask = _mm256_set1_epi16(static_cast<short>(0xFC00));
-      __m256i highSurrogateStart = _mm256_set1_epi16(static_cast<short>(0xD800));
-      __m256i highSurrogate = _mm256_and_si256(chunk, highSurrogateMask);
-      __m256i isSurrogate = _mm256_cmpeq_epi16(highSurrogate, highSurrogateStart);
+    size_t i = 0;
+    while (i < input_size) {
+        if (i + 16 <= input_size) {
+            __m256i input = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&utf16[i]));
+            
+            // Check for surrogates
+            __m256i is_surrogate = _mm256_and_si256(
+                _mm256_cmpgt_epi16(input, surrogate_min),
+                _mm256_cmpgt_epi16(surrogate_max, input)
+            );
 
-      int bitfield = _mm256_movemask_epi8(isSurrogate);
+            int surrogate_mask = _mm256_movemask_epi8(is_surrogate);
+            if (surrogate_mask == 0) {
+                // No surrogates, simple conversion
+                __m256i utf32_low = _mm256_cvtepu16_epi32(_mm256_extracti128_si256(input, 0));
+                __m256i utf32_high = _mm256_cvtepu16_epi32(_mm256_extracti128_si256(input, 1));
 
-      if (bitfield == 0)
-      {
-        // No surrogates in the chunk, so we can directly convert the UTF-16 characters to UTF-32
-        for (std::size_t j = 0; j < 16; ++j)
-        {
-          utf32.push_back(static_cast<char32_t>(chars[i + j]));
+                _mm256_storeu_si256(reinterpret_cast<__m256i*>(&output[output.size()]), utf32_low);
+                _mm256_storeu_si256(reinterpret_cast<__m256i*>(&output[output.size() + 8]), utf32_high);
+
+                output.resize(output.size() + 16);
+                i += 16;
+            } else {
+                // Handle surrogate pairs
+                for (int j = 0; j < 16; ++j) {
+                    char16_t high = utf16[i];
+                    if (high >= 0xD800 && high <= 0xDBFF && i + 1 < input_size) {
+                        char16_t low = utf16[i + 1];
+                        if (low >= 0xDC00 && low <= 0xDFFF) {
+                            char32_t codepoint = 0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00);
+                            output.push_back(codepoint);
+                            i += 2;
+                        } else {
+                            output.push_back(high);
+                            ++i;
+                        }
+                    } else {
+                        output.push_back(high);
+                        ++i;
+                    }
+                    if (i >= input_size) break;
+                }
+            }
+        } else {
+            // Handle remaining characters
+            char16_t high = utf16[i];
+            if (high >= 0xD800 && high <= 0xDBFF && i + 1 < input_size) {
+                char16_t low = utf16[i + 1];
+                if (low >= 0xDC00 && low <= 0xDFFF) {
+                    char32_t codepoint = 0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00);
+                    output.push_back(codepoint);
+                    i += 2;
+                } else {
+                    output.push_back(high);
+                    ++i;
+                }
+            } else {
+                output.push_back(high);
+                ++i;
+            }
         }
-        i += 16;
-      }
-      else
-      {
-        // Surrogates present in the chunk, so we need to handle them separately
-        utf16_to_utf32_common(chars + i, length - i, utf32);
-        break;
-      }
     }
-    else
-    {
-      utf16_to_utf32_common(chars + i, length - i, utf32);
-      break;
-    }
-  }
 
-  return utf32;
+    return std::u32string(output.begin(), output.end());
 }
 
 auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16string
