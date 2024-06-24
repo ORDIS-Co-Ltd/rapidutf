@@ -3,9 +3,7 @@
 
 #include "rapidutf/rapidutf.hpp"
 
-#if defined(RAPIDUTF_USE_SSE_4_2)
-#  include <nmmintrin.h>  // SSE4.2 intrinsics
-#elif defined(RAPIDUTF_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2)
 #  include <immintrin.h>  // SSE4.2 intrinsics
 #elif defined(RAPIDUTF_USE_NEON)
 #  include <arm_neon.h>
@@ -15,6 +13,26 @@
 
 namespace rapidutf
 {
+
+#if defined(_MSC_VER)
+// Implementation for MSVC
+#  include <intrin.h>
+static inline int ctz(uint32_t value)
+{
+  unsigned long trailing_zero = 0;
+  if (_BitScanForward(&trailing_zero, value))
+  {
+    return static_cast<int>(trailing_zero);
+  }
+  return 32;
+}
+#else
+// Implementation for GCC and Clang
+static inline int ctz(uint32_t value)
+{
+  return __builtin_ctz(value);
+}
+#endif
 
 constexpr std::array<std::array<uint8_t, 32>, 256> generate_ascii_shuffle_table()
 {
@@ -173,7 +191,7 @@ auto converter::is_valid_utf32(const std::u32string &utf32) -> bool
   return true;
 }
 
-void converter::utf8_to_utf16_common(const unsigned char *bytes, std::size_t length, std::u16string &utf16)
+void converter::utf8_to_utf16_scalar(const unsigned char *bytes, std::size_t length, std::u16string &utf16)
 {
   for (std::size_t i = 0; i < length;)
   {
@@ -228,7 +246,7 @@ void converter::utf8_to_utf16_common(const unsigned char *bytes, std::size_t len
   }
 }
 
-void converter::utf16_to_utf8_common(const char16_t *chars, std::size_t length, std::string &utf8)
+void converter::utf16_to_utf8_scalar(const char16_t *chars, std::size_t length, std::string &utf8)
 {
   for (std::size_t i = 0; i < length; ++i)
   {
@@ -277,7 +295,7 @@ void converter::utf16_to_utf8_common(const char16_t *chars, std::size_t length, 
   }
 }
 
-void converter::utf16_to_utf32_common(const char16_t *chars, std::size_t length, std::u32string &utf32)
+void converter::utf16_to_utf32_scalar(const char16_t *chars, std::size_t length, std::u32string &utf32)
 {
   for (std::size_t i = 0; i < length; ++i)
   {
@@ -310,7 +328,7 @@ void converter::utf16_to_utf32_common(const char16_t *chars, std::size_t length,
   }
 }
 
-void converter::utf32_to_utf16_common(const char32_t *chars, std::size_t length, std::u16string &utf16)
+void converter::utf32_to_utf16_scalar(const char32_t *chars, std::size_t length, std::u16string &utf16)
 {
   for (std::size_t i = 0; i < length; ++i)
   {
@@ -336,7 +354,7 @@ void converter::utf32_to_utf16_common(const char32_t *chars, std::size_t length,
   }
 }
 
-void converter::utf8_to_utf32_common(const unsigned char *bytes, std::size_t length, std::u32string &utf32)
+void converter::utf8_to_utf32_scalar(const unsigned char *bytes, std::size_t length, std::u32string &utf32)
 {
   for (std::size_t i = 0; i < length;)
   {
@@ -397,7 +415,7 @@ void converter::utf8_to_utf32_common(const unsigned char *bytes, std::size_t len
   }
 }
 
-void converter::utf32_to_utf8_common(const char32_t *chars, std::size_t length, std::string &utf8)
+void converter::utf32_to_utf8_scalar(const char32_t *chars, std::size_t length, std::string &utf8)
 {
   for (std::size_t i = 0; i < length; ++i)
   {
@@ -475,13 +493,13 @@ auto converter::utf8_to_utf16_avx2(const std::string &utf8) -> std::u16string
       else
       {
         // Handle non-ASCII characters with AVX2
-        utf8_to_utf16_common(bytes + i, length - i, utf16);
+        utf8_to_utf16_scalar(bytes + i, length - i, utf16);
         break;
       }
     }
     else
     {
-      utf8_to_utf16_common(bytes + i, length - i, utf16);
+      utf8_to_utf16_scalar(bytes + i, length - i, utf16);
       break;
     }
   }
@@ -538,85 +556,105 @@ auto converter::utf16_to_utf8_avx2(const std::u16string &utf16) -> std::string
   }
 
   // Handle remaining characters
-  utf16_to_utf8_common(utf16.data(), len, utf8);
-  
+  utf16_to_utf8_scalar(utf16.data(), len, utf8);
+
   return utf8;
 }
 
 auto converter::utf16_to_utf32_avx2(const std::u16string &utf16) -> std::u32string
 {
-    std::u32string utf32;
-    utf32.reserve(utf16.size());
+  std::u32string utf32;
+  utf32.reserve(utf16.size());
 
-    const char16_t *input = utf16.data();
-    const size_t length = utf16.size();
+  const char16_t *input = utf16.data();
+  const size_t length = utf16.size();
 
-    char32_t buffer[16];
-    size_t i = 0;
+  char32_t buffer[16];
+  size_t i = 0;
 
-    for (; i + 15 < length; i += 16) {
-        __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(input + i));
+  for (; i + 15 < length; i += 16)
+  {
+    __m256i data = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(input + i));
 
-        // Check for surrogates
-        __m256i surr_mask = _mm256_set1_epi16(0xF800);
-        __m256i surr_test = _mm256_set1_epi16(0xD800);
-        __m256i is_surrogate = _mm256_cmpeq_epi16(_mm256_and_si256(data, surr_mask), surr_test);
-        uint32_t mask = _mm256_movemask_epi8(is_surrogate);
+    // Check for surrogates
+    __m256i surr_mask = _mm256_set1_epi16(0xF800);
+    __m256i surr_test = _mm256_set1_epi16(0xD800);
+    __m256i is_surrogate = _mm256_cmpeq_epi16(_mm256_and_si256(data, surr_mask), surr_test);
+    uint32_t mask = _mm256_movemask_epi8(is_surrogate);
 
-        if (mask == 0) {
-            // No surrogates: we can safely expand directly to UTF-32
-            __m256i low = _mm256_unpacklo_epi16(data, _mm256_setzero_si256());
-            __m256i high = _mm256_unpackhi_epi16(data, _mm256_setzero_si256());
+    if (mask == 0)
+    {
+      // No surrogates: we can safely expand directly to UTF-32
+      __m256i low = _mm256_unpacklo_epi16(data, _mm256_setzero_si256());
+      __m256i high = _mm256_unpackhi_epi16(data, _mm256_setzero_si256());
 
-            _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer), low);
-            _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer + 8), high);
-            utf32.insert(utf32.end(), buffer, buffer + 16);
-        } else {
-            // Handle surrogates and irregular data with scalar approach
-            for (int j = 0; j < 16; ++j) {
-                char16_t part = input[i + j];
-                if (part < 0xD800 || part > 0xDFFF) {
-                    utf32.push_back(part);
-                } else if (part >= 0xD800 && part <= 0xDBFF) {
-                    if (i + j + 1 >= length) {
-                        throw std::runtime_error("Invalid UTF-16: Unexpected end of input after high surrogate");
-                    }
-                    char16_t low_surrogate = input[i + j + 1];
-                    if (low_surrogate < 0xDC00 || low_surrogate > 0xDFFF) {
-                        throw std::runtime_error("Invalid UTF-16: Invalid low surrogate");
-                    }
-                    uint32_t surrogate_pair = 0x10000 + ((part - 0xD800) << 10) + (low_surrogate - 0xDC00);
-                    utf32.push_back(surrogate_pair);
-                    ++j; // skip the next code unit
-                } else {
-                    throw std::runtime_error("Invalid UTF-16: Unexpected low surrogate");
-                }
-            }
-        }
+      _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer), low);
+      _mm256_storeu_si256(reinterpret_cast<__m256i *>(buffer + 8), high);
+      utf32.insert(utf32.end(), buffer, buffer + 16);
     }
-
-    // Handle any leftover characters that didn't fit into a 16-character block
-    for (; i < length; i++) {
-        char16_t part = input[i];
-        if (part < 0xD800 || part > 0xDFFF) {
-            utf32.push_back(part);
-        } else if (part >= 0xD800 && part <= 0xDBFF) {
-            if (i + 1 >= length) {
-                throw std::runtime_error("Invalid UTF-16: Unexpected end of input after high surrogate");
-            }
-            char16_t low_surrogate = input[i + 1];
-            if (low_surrogate < 0xDC00 || low_surrogate > 0xDFFF) {
-                throw std::runtime_error("Invalid UTF-16: Invalid low surrogate");
-            }
-            uint32_t surrogate_pair = 0x10000 + ((part - 0xD800) << 10) + (low_surrogate - 0xDC00);
-            utf32.push_back(surrogate_pair);
-            ++i; // skip the next code unit
-        } else {
-            throw std::runtime_error("Invalid UTF-16: Unexpected low surrogate");
+    else
+    {
+      // Handle surrogates and irregular data with scalar approach
+      for (int j = 0; j < 16; ++j)
+      {
+        char16_t part = input[i + j];
+        if (part < 0xD800 || part > 0xDFFF)
+        {
+          utf32.push_back(part);
         }
+        else if (part >= 0xD800 && part <= 0xDBFF)
+        {
+          if (i + j + 1 >= length)
+          {
+            throw std::runtime_error("Invalid UTF-16: Unexpected end of input after high surrogate");
+          }
+          char16_t low_surrogate = input[i + j + 1];
+          if (low_surrogate < 0xDC00 || low_surrogate > 0xDFFF)
+          {
+            throw std::runtime_error("Invalid UTF-16: Invalid low surrogate");
+          }
+          uint32_t surrogate_pair = 0x10000 + ((part - 0xD800) << 10) + (low_surrogate - 0xDC00);
+          utf32.push_back(surrogate_pair);
+          ++j;  // skip the next code unit
+        }
+        else
+        {
+          throw std::runtime_error("Invalid UTF-16: Unexpected low surrogate");
+        }
+      }
     }
+  }
 
-    return utf32;
+  // Handle any leftover characters that didn't fit into a 16-character block
+  for (; i < length; i++)
+  {
+    char16_t part = input[i];
+    if (part < 0xD800 || part > 0xDFFF)
+    {
+      utf32.push_back(part);
+    }
+    else if (part >= 0xD800 && part <= 0xDBFF)
+    {
+      if (i + 1 >= length)
+      {
+        throw std::runtime_error("Invalid UTF-16: Unexpected end of input after high surrogate");
+      }
+      char16_t low_surrogate = input[i + 1];
+      if (low_surrogate < 0xDC00 || low_surrogate > 0xDFFF)
+      {
+        throw std::runtime_error("Invalid UTF-16: Invalid low surrogate");
+      }
+      uint32_t surrogate_pair = 0x10000 + ((part - 0xD800) << 10) + (low_surrogate - 0xDC00);
+      utf32.push_back(surrogate_pair);
+      ++i;  // skip the next code unit
+    }
+    else
+    {
+      throw std::runtime_error("Invalid UTF-16: Unexpected low surrogate");
+    }
+  }
+
+  return utf32;
 }
 
 auto converter::utf32_to_utf16_avx2(const std::u32string &utf32) -> std::u16string
@@ -728,7 +766,7 @@ auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
     else
     {
       // Process ASCII characters in bulk
-      int ascii_count = __builtin_ctz(~ascii_mask);
+      int ascii_count = ctz(~ascii_mask);
       if (ascii_count > 0)
       {
         size_t current_size = utf32.size();
@@ -830,433 +868,99 @@ auto converter::utf8_to_utf32_avx2(const std::string &utf8) -> std::u32string
 
 auto converter::utf32_to_utf8_avx2(const std::u32string &utf32) -> std::string
 {
-const char32_t *src = utf32.data();
-    size_t len = utf32.length();
-    std::string utf8;
-    utf8.reserve(len * 4); // Reserve space for worst-case scenario
-
-    size_t i = 0;
-    for (; i + 8 <= len; i += 8) {
-        __m256i codepoints = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(src + i));
-
-        // Check for invalid codepoints
-        __m256i invalid = _mm256_or_si256(
-            _mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0x10FFFF)),
-            _mm256_and_si256(
-                _mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0xD7FF)),
-                _mm256_cmpgt_epi32(_mm256_set1_epi32(0xE000), codepoints)
-            )
-        );
-
-        if (!_mm256_testz_si256(invalid, invalid)) {
-            throw std::runtime_error("Invalid UTF-32 codepoint detected");
-        }
-
-        // Compute the lengths of UTF-8 sequences for each codepoint
-        __m256i lengths = _mm256_set1_epi32(1);
-        lengths = _mm256_add_epi32(lengths, _mm256_and_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0x7F)), _mm256_set1_epi32(1)));
-        lengths = _mm256_add_epi32(lengths, _mm256_and_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0x7FF)), _mm256_set1_epi32(1)));
-        lengths = _mm256_add_epi32(lengths, _mm256_and_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0xFFFF)), _mm256_set1_epi32(1)));
-
-        // Compute the total length of the UTF-8 sequences
-        __m256i sum = _mm256_hadd_epi32(lengths, lengths);
-        sum = _mm256_hadd_epi32(sum, sum);
-        int total_length = _mm256_extract_epi32(sum, 0) + _mm256_extract_epi32(sum, 4);
-
-        // Resize the output string to accommodate the new UTF-8 sequences
-        size_t prev_size = utf8.size();
-        utf8.resize(prev_size + total_length);
-        char *dst = &utf8[prev_size];
-
-        // Process each codepoint and generate the corresponding UTF-8 sequence
-        for (int j = 0; j < 8; ++j) {
-            char32_t codepoint = src[i + j];
-            if (codepoint <= 0x7F) {
-                *dst++ = static_cast<char>(codepoint);
-            } else if (codepoint <= 0x7FF) {
-                *dst++ = static_cast<char>(0xC0 | (codepoint >> 6));
-                *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
-            } else if (codepoint <= 0xFFFF) {
-                *dst++ = static_cast<char>(0xE0 | (codepoint >> 12));
-                *dst++ = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-                *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
-            } else {
-                *dst++ = static_cast<char>(0xF0 | (codepoint >> 18));
-                *dst++ = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
-                *dst++ = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-                *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
-            }
-        }
-    }
-
-    // Process the remaining codepoints (less than 8)
-    for (; i < len; ++i) {
-        char32_t codepoint = src[i];
-        if (codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF)) {
-            throw std::runtime_error("Invalid UTF-32 codepoint detected");
-        }
-        if (codepoint <= 0x7F) {
-            utf8 += static_cast<char>(codepoint);
-        } else if (codepoint <= 0x7FF) {
-            utf8 += static_cast<char>(0xC0 | (codepoint >> 6));
-            utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
-        } else if (codepoint <= 0xFFFF) {
-            utf8 += static_cast<char>(0xE0 | (codepoint >> 12));
-            utf8 += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-            utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
-        } else {
-            utf8 += static_cast<char>(0xF0 | (codepoint >> 18));
-            utf8 += static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
-            utf8 += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
-            utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
-        }
-    }
-
-    return utf8;
-}
-
-#elif defined(RAPIDUTF_USE_SSE_4_2)
-
-/**
- * @brief Converts a UTF-8 encoded string to a UTF-16 encoded string using SSE4.2 intrinsics.
- *
- * This function takes a std::string containing a UTF-8 encoded string as input and returns a
- * std::u16string containing the equivalent UTF-16 encoded string. The conversion is performed
- * using SIMD instructions provided by the SSE4.2 instruction set, which can significantly
- * improve performance over traditional byte-by-byte conversion methods.
- *
- * @param utf8 A std::string containing a UTF-8 encoded string to be converted.
- * @return A std::u16string containing the equivalent UTF-16 encoded string.
- * @throws std::runtime_error If an invalid UTF-8 sequence is encountered in the input string.
- */
-auto converter::utf8_to_utf16_sse42(const std::string &utf8) -> std::u16string
-{
-  std::u16string utf16;
-  utf16.reserve(utf8.size());
-
-  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
-  std::size_t length = utf8.length();
-
-  for (std::size_t i = 0; i < length;)
-  {
-    if (length - i >= 16)
-    {
-      __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes + i));
-      __m128i mask = _mm_set1_epi8(static_cast<char>(0x80));
-      __m128i result = _mm_cmpeq_epi8(_mm_and_si128(chunk, mask), _mm_setzero_si128());
-      int bitfield = _mm_movemask_epi8(result);
-
-      if (bitfield == 0xFFFF)
-      {
-        // All characters in the chunk are ASCII
-        for (int j = 0; j < 16; ++j)
-        {
-          utf16.push_back(static_cast<char16_t>(bytes[i + j]));
-        }
-        i += 16;
-      }
-      else
-      {
-        // Handle non-ASCII characters with SSE4.2
-        // ... (SSE4.2 specific code)
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
-        utf8_to_utf16_common(bytes + i, length - i, utf16);
-        break;
-      }
-    }
-    else
-    {
-      utf8_to_utf16_common(bytes + i, length - i, utf16);
-      break;
-    }
-  }
-
-  return utf16;
-}
-
-/**
- * @brief Converts a UTF-16 encoded string to a UTF-8 encoded string using SSE4.2 intrinsics.
- *
- * This function leverages SSE4.2 intrinsics to efficiently convert a UTF-16 encoded string
- * to a UTF-8 encoded string. It processes the input string in chunks of 8 characters at a time.
- * If all characters in a chunk are ASCII (i.e., their values are less than 0x80), they are
- * directly appended to the output string. Otherwise, each character is processed individually
- * and converted to its corresponding UTF-8 representation.
- *
- * @param utf16 The input UTF-16 encoded string.
- * @return A UTF-8 encoded string.
- * @throws std::runtime_error If an invalid UTF-16 sequence is encountered.
- */
-auto converter::utf16_to_utf8_sse42(const std::u16string &utf16) -> std::string
-{
+  const char32_t *src = utf32.data();
+  size_t len = utf32.length();
   std::string utf8;
-  utf8.reserve(utf16.size() * 3);
+  utf8.reserve(len * 4);  // Reserve space for worst-case scenario
 
-  const char16_t *chars = utf16.data();
-  std::size_t length = utf16.length();
-
-  for (std::size_t i = 0; i < length;)
+  size_t i = 0;
+  for (; i + 8 <= len; i += 8)
   {
-    if (length - i >= 8)
-    {
-      __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i *>(chars + i));
-      __m128i mask = _mm_set1_epi16(0x7F);
-      __m128i result = _mm_cmpeq_epi16(_mm_and_si128(chunk, mask), chunk);
-      int bitfield = _mm_movemask_epi8(result);
+    __m256i codepoints = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src + i));
 
-      if (bitfield == 0xFFFF)
+    // Check for invalid codepoints
+    __m256i invalid = _mm256_or_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0x10FFFF)),
+                                      _mm256_and_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0xD7FF)), _mm256_cmpgt_epi32(_mm256_set1_epi32(0xE000), codepoints)));
+
+    if (!_mm256_testz_si256(invalid, invalid))
+    {
+      throw std::runtime_error("Invalid UTF-32 codepoint detected");
+    }
+
+    // Compute the lengths of UTF-8 sequences for each codepoint
+    __m256i lengths = _mm256_set1_epi32(1);
+    lengths = _mm256_add_epi32(lengths, _mm256_and_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0x7F)), _mm256_set1_epi32(1)));
+    lengths = _mm256_add_epi32(lengths, _mm256_and_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0x7FF)), _mm256_set1_epi32(1)));
+    lengths = _mm256_add_epi32(lengths, _mm256_and_si256(_mm256_cmpgt_epi32(codepoints, _mm256_set1_epi32(0xFFFF)), _mm256_set1_epi32(1)));
+
+    // Compute the total length of the UTF-8 sequences
+    __m256i sum = _mm256_hadd_epi32(lengths, lengths);
+    sum = _mm256_hadd_epi32(sum, sum);
+    int total_length = _mm256_extract_epi32(sum, 0) + _mm256_extract_epi32(sum, 4);
+
+    // Resize the output string to accommodate the new UTF-8 sequences
+    size_t prev_size = utf8.size();
+    utf8.resize(prev_size + total_length);
+    char *dst = &utf8[prev_size];
+
+    // Process each codepoint and generate the corresponding UTF-8 sequence
+    for (int j = 0; j < 8; ++j)
+    {
+      char32_t codepoint = src[i + j];
+      if (codepoint <= 0x7F)
       {
-        // All characters in the chunk are ASCII
-        for (int j = 0; j < 8; ++j)
-        {
-          utf8.push_back(static_cast<char>(chars[i + j]));
-        }
-        i += 8;
+        *dst++ = static_cast<char>(codepoint);
+      }
+      else if (codepoint <= 0x7FF)
+      {
+        *dst++ = static_cast<char>(0xC0 | (codepoint >> 6));
+        *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
+      }
+      else if (codepoint <= 0xFFFF)
+      {
+        *dst++ = static_cast<char>(0xE0 | (codepoint >> 12));
+        *dst++ = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+        *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
       }
       else
       {
-        // Handle non-ASCII characters with SSE4.2
-        // ... (SSE4.2 specific code)
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
-        utf16_to_utf8_common(chars + i, length - i, utf8);
-        break;
+        *dst++ = static_cast<char>(0xF0 | (codepoint >> 18));
+        *dst++ = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+        *dst++ = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+        *dst++ = static_cast<char>(0x80 | (codepoint & 0x3F));
       }
-    }
-    else
-    {
-      utf16_to_utf8_common(chars + i, length - i, utf8);
-      break;
     }
   }
 
-  return utf8;
-}
-
-/**
- * Converts a UTF-16 encoded string to a UTF-32 encoded string using SSE4.2 intrinsics.
- *
- * This function takes a UTF-16 encoded string as input and returns a UTF-32 encoded string as output.
- * It uses SSE4.2 intrinsics to optimize the conversion process. The function first checks if the input
- * string contains any surrogate pairs. If it does, the function converts each surrogate pair to a single
- * UTF-32 code point. If the input string does not contain any surrogate pairs, the function simply
- * reinterprets the input string as a UTF-32 string.
- *
- * @param utf16 The input UTF-16 encoded string to convert.
- * @return The output UTF-32 encoded string.
- * @throw std::runtime_error If the input string contains an invalid UTF-16 sequence.
- */
-auto converter::utf16_to_utf32_sse42(const std::u16string &utf16) -> std::u32string
-{
-  std::u32string utf32;
-  utf32.reserve(utf16.size());
-
-  const char16_t *chars = utf16.data();
-  std::size_t length = utf16.length();
-
-  for (std::size_t i = 0; i < length;)
+  // Process the remaining codepoints (less than 8)
+  for (; i < len; ++i)
   {
-    if (length - i >= 8)
+    char32_t codepoint = src[i];
+    if (codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
     {
-      __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i *>(chars + i));
-      __m128i highSurrogate = _mm_and_si128(chunk, _mm_set1_epi16(static_cast<short>(0xFC00)));
-      __m128i isSurrogate = _mm_cmpeq_epi16(highSurrogate, _mm_set1_epi16(static_cast<short>(0xD800)));
-      int bitfield = _mm_movemask_epi8(isSurrogate);
-
-      if (bitfield == 0)
-      {
-        // No surrogates in the chunk, so we can directly convert the UTF-16 characters to UTF-32
-        for (int j = 0; j < 8; ++j)
-        {
-          utf32.push_back(static_cast<char32_t>(chars[i + j]));
-        }
-        i += 8;
-      }
-      else
-      {
-        // Surrogates present in the chunk, so we need to handle them separately
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
-        utf16_to_utf32_common(chars + i, length - i, utf32);
-        break;
-      }
+      throw std::runtime_error("Invalid UTF-32 codepoint detected");
+    }
+    if (codepoint <= 0x7F)
+    {
+      utf8 += static_cast<char>(codepoint);
+    }
+    else if (codepoint <= 0x7FF)
+    {
+      utf8 += static_cast<char>(0xC0 | (codepoint >> 6));
+      utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
+    }
+    else if (codepoint <= 0xFFFF)
+    {
+      utf8 += static_cast<char>(0xE0 | (codepoint >> 12));
+      utf8 += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+      utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
     }
     else
     {
-      utf16_to_utf32_common(chars + i, length - i, utf32);
-      break;
-    }
-  }
-
-  return utf32;
-}
-
-/**
- * Converts a UTF-32 encoded string to a UTF-16 encoded string using SSE4.2 intrinsics.
- *
- * This function takes a UTF-32 encoded string as input and converts it to a UTF-16 encoded string.
- * It uses SSE4.2 intrinsics to optimize the conversion process. The function checks if any of the
- * UTF-32 code points require surrogate pairs in UTF-16 encoding. If they do, the function converts
- * these code points to surrogate pairs. Otherwise, it directly converts the code points to UTF-16.
- *
- * @param utf32 The input UTF-32 encoded string.
- * @return The output UTF-16 encoded string.
- * @throw std::runtime_error If the input string contains an invalid UTF-32 code point.
- */
-auto converter::utf32_to_utf16_sse42(const std::u32string &utf32) -> std::u16string
-{
-  std::u16string utf16;
-  utf16.reserve(utf32.size() * 2);
-
-  const char32_t *chars = utf32.data();
-  std::size_t length = utf32.length();
-
-  for (std::size_t i = 0; i < length;)
-  {
-    if (length - i >= 4)
-    {
-      __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i *>(chars + i));
-      __m128i mask = _mm_set1_epi32(0xFFFF);
-      __m128i result = _mm_cmpgt_epi32(chunk, mask);
-      int bitfield = _mm_movemask_ps(_mm_castsi128_ps(result));
-
-      if (bitfield == 0)
-      {
-        // No characters > 0xFFFF in the chunk
-        for (int j = 0; j < 4; ++j)
-        {
-          utf16.push_back(static_cast<char16_t>(chars[i + j]));
-        }
-        i += 4;
-      }
-      else
-      {
-        // Handle characters > 0xFFFF with SSE4.2
-        // ... (SSE4.2 specific code)
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
-        utf32_to_utf16_common(chars + i, length - i, utf16);
-        break;
-      }
-    }
-    else
-    {
-      utf32_to_utf16_common(chars + i, length - i, utf16);
-      break;
-    }
-  }
-
-  return utf16;
-}
-
-/**
- * Converts a UTF-8 encoded string to a UTF-32 encoded string using SSE4.2 intrinsics.
- *
- * This function takes a UTF-8 encoded string as input and converts it to a UTF-32 encoded string.
- * It uses SSE4.2 intrinsics to optimize the conversion process. The function processes the input
- * string in chunks and converts each chunk to its corresponding UTF-32 representation.
- *
- * @param utf8 The input UTF-8 encoded string.
- * @return The output UTF-32 encoded string.
- * @throw std::runtime_error If the input string contains an invalid UTF-8 sequence.
- */
-auto converter::utf8_to_utf32_sse42(const std::string &utf8) -> std::u32string
-{
-  std::u32string utf32;
-  utf32.reserve(utf8.size());
-
-  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
-  std::size_t length = utf8.length();
-
-  for (std::size_t i = 0; i < length;)
-  {
-    if (length - i >= 16)
-    {
-      __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i *>(bytes + i));
-      __m128i mask = _mm_set1_epi8(static_cast<char>(0x80));
-      __m128i result = _mm_cmpeq_epi8(_mm_and_si128(chunk, mask), _mm_setzero_si128());
-      int bitfield = _mm_movemask_epi8(result);
-
-      if (bitfield == 0xFFFF)
-      {
-        // All characters in the chunk are ASCII
-        for (int j = 0; j < 16; ++j)
-        {
-          utf32.push_back(static_cast<char32_t>(bytes[i + j]));
-        }
-        i += 16;
-      }
-      else
-      {
-        // Handle non-ASCII characters with SSE4.2
-        // ... (SSE4.2 specific code)
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
-        utf8_to_utf32_common(bytes + i, length - i, utf32);
-        break;
-      }
-    }
-    else
-    {
-      utf8_to_utf32_common(bytes + i, length - i, utf32);
-      break;
-    }
-  }
-
-  return utf32;
-}
-
-/**
- * Converts a UTF-32 encoded string to a UTF-8 encoded string using SSE4.2 intrinsics.
- *
- * This function takes a UTF-32 encoded string as input and converts it to a UTF-8 encoded string.
- * It uses SSE4.2 intrinsics to optimize the conversion process. The function processes the input
- * string in chunks and converts each chunk to its corresponding UTF-8 representation.
- *
- * @param utf32 The input UTF-32 encoded string.
- * @return The output UTF-8 encoded string.
- * @throw std::runtime_error If the input string contains an invalid UTF-32 code point.
- */
-auto converter::utf32_to_utf8_sse42(const std::u32string &utf32) -> std::string
-{
-  if (!is_valid_utf32(utf32))
-  {
-    throw std::runtime_error("Invalid UTF-32 string");
-  }
-
-  std::string utf8;
-  utf8.reserve(utf32.size() * 4);
-
-  const char32_t *chars = utf32.data();
-  std::size_t length = utf32.length();
-
-  for (std::size_t i = 0; i < length;)
-  {
-    if (length - i >= 4)
-    {
-      __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i *>(chars + i));
-      __m128i mask = _mm_set1_epi32(0x7F);
-      __m128i result = _mm_cmpeq_epi32(_mm_and_si128(chunk, mask), chunk);
-      int bitfield = _mm_movemask_ps(_mm_castsi128_ps(result));
-
-      if (bitfield == 0xF)
-      {
-        // All characters in the chunk are ASCII
-        for (int j = 0; j < 4; ++j)
-        {
-          utf8.push_back(static_cast<char>(chars[i + j]));
-        }
-        i += 4;
-      }
-      else
-      {
-        // Handle non-ASCII characters with SSE4.2
-        // ... (SSE4.2 specific code)
-        // For simplicity, let's assume we handle the non-ASCII part here and then call the common function
-        utf32_to_utf8_common(chars + i, length - i, utf8);
-        break;
-      }
-    }
-    else
-    {
-      utf32_to_utf8_common(chars + i, length - i, utf8);
-      break;
+      utf8 += static_cast<char>(0xF0 | (codepoint >> 18));
+      utf8 += static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+      utf8 += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+      utf8 += static_cast<char>(0x80 | (codepoint & 0x3F));
     }
   }
 
@@ -1308,13 +1012,13 @@ auto converter::utf8_to_utf16_neon(const std::string &utf8) -> std::u16string
       else
       {
         // Handle non-ASCII characters
-        utf8_to_utf16_common(bytes + i, length - i, utf16);
+        utf8_to_utf16_scalar(bytes + i, length - i, utf16);
         break;
       }
     }
     else
     {
-      utf8_to_utf16_common(bytes + i, length - i, utf16);
+      utf8_to_utf16_scalar(bytes + i, length - i, utf16);
       break;
     }
   }
@@ -1376,13 +1080,13 @@ auto converter::utf16_to_utf8_neon(const std::u16string &utf16) -> std::string
       else
       {
         // Handle non-ASCII characters with NEON
-        utf16_to_utf8_common(chars + i, length - i, utf8);
+        utf16_to_utf8_scalar(chars + i, length - i, utf8);
         break;
       }
     }
     else
     {
-      utf16_to_utf8_common(chars + i, length - i, utf8);
+      utf16_to_utf8_scalar(chars + i, length - i, utf8);
       break;
     }
   }
@@ -1438,13 +1142,13 @@ auto converter::utf16_to_utf32_neon(const std::u16string &utf16) -> std::u32stri
       else
       {
         // Surrogates present in the chunk, so we need to handle them separately
-        utf16_to_utf32_common(chars + i, length - i, utf32);
+        utf16_to_utf32_scalar(chars + i, length - i, utf32);
         break;
       }
     }
     else
     {
-      utf16_to_utf32_common(chars + i, length - i, utf32);
+      utf16_to_utf32_scalar(chars + i, length - i, utf32);
       break;
     }
   }
@@ -1746,13 +1450,13 @@ auto converter::utf8_to_utf32_neon(const std::string &utf8) -> std::u32string
       else
       {
         // Handle non-ASCII characters with NEON
-        utf8_to_utf32_common(bytes + i, length - i, utf32);
+        utf8_to_utf32_scalar(bytes + i, length - i, utf32);
         break;
       }
     }
     else
     {
-      utf8_to_utf32_common(bytes + i, length - i, utf32);
+      utf8_to_utf32_scalar(bytes + i, length - i, utf32);
       break;
     }
   }
@@ -1808,13 +1512,13 @@ auto converter::utf32_to_utf8_neon(const std::u32string &utf32) -> std::string
       else
       {
         // Handle non-ASCII characters with NEON
-        utf32_to_utf8_common(chars + i, length - i, utf8);
+        utf32_to_utf8_scalar(chars + i, length - i, utf8);
         break;
       }
     }
     else
     {
-      utf32_to_utf8_common(chars + i, length - i, utf8);
+      utf32_to_utf8_scalar(chars + i, length - i, utf8);
       break;
     }
   }
@@ -1843,7 +1547,7 @@ auto converter::utf8_to_utf16_fallback(const std::string &utf8) -> std::u16strin
   const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
   std::size_t length = utf8.length();
 
-  utf8_to_utf16_common(bytes, length, utf16);
+  utf8_to_utf16_scalar(bytes, length, utf16);
 
   return utf16;
 }
@@ -1867,7 +1571,7 @@ auto converter::utf16_to_utf8_fallback(const std::u16string &utf16) -> std::stri
   const char16_t *chars = utf16.data();
   std::size_t length = utf16.length();
 
-  utf16_to_utf8_common(chars, length, utf8);
+  utf16_to_utf8_scalar(chars, length, utf8);
 
   return utf8;
 }
@@ -1891,7 +1595,7 @@ auto converter::utf16_to_utf32_fallback(const std::u16string &utf16) -> std::u32
   const char16_t *chars = utf16.data();
   std::size_t length = utf16.length();
 
-  utf16_to_utf32_common(chars, length, utf32);
+  utf16_to_utf32_scalar(chars, length, utf32);
 
   return utf32;
 }
@@ -1915,7 +1619,7 @@ auto converter::utf32_to_utf16_fallback(const std::u32string &utf32) -> std::u16
   const char32_t *chars = utf32.data();
   std::size_t length = utf32.length();
 
-  utf32_to_utf16_common(chars, length, utf16);
+  utf32_to_utf16_scalar(chars, length, utf16);
 
   return utf16;
 }
@@ -1939,7 +1643,7 @@ auto converter::utf8_to_utf32_fallback(const std::string &utf8) -> std::u32strin
   const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
   std::size_t length = utf8.length();
 
-  utf8_to_utf32_common(bytes, length, utf32);
+  utf8_to_utf32_scalar(bytes, length, utf32);
 
   return utf32;
 }
@@ -1968,7 +1672,7 @@ auto converter::utf32_to_utf8_fallback(const std::u32string &utf32) -> std::stri
   const char32_t *chars = utf32.data();
   std::size_t length = utf32.length();
 
-  utf32_to_utf8_common(chars, length, utf8);
+  utf32_to_utf8_scalar(chars, length, utf8);
 
   return utf8;
 }
