@@ -4,8 +4,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+// NOLINTBEGIN
+
 TEST_CASE("UTF-8 validation tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid UTF-8 strings
     REQUIRE(converter::is_valid_utf8("Hello, world!")); // valid ASCII
@@ -23,7 +25,7 @@ TEST_CASE("UTF-8 validation tests", "[unicode]") {
 }
 
 TEST_CASE("UTF-16 validation tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid UTF-16 strings
     REQUIRE(converter::is_valid_utf16(u"Hello, world!")); // valid ASCII
@@ -57,7 +59,7 @@ TEST_CASE("UTF-16 validation tests", "[unicode]") {
 }
 
 TEST_CASE("UTF-32 validation tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid UTF-32 strings
     REQUIRE(converter::is_valid_utf32(U"Hello, world!")); // valid ASCII
@@ -72,7 +74,7 @@ TEST_CASE("UTF-32 validation tests", "[unicode]") {
 }
 
 TEST_CASE("UTF-16 to UTF-32 conversion tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid conversion tests
     REQUIRE(converter::utf16_to_utf32(u"Hello, world!") == U"Hello, world!");
@@ -92,7 +94,7 @@ TEST_CASE("UTF-16 to UTF-32 conversion tests", "[unicode]") {
 }
 
 TEST_CASE("UTF-32 to UTF-16 conversion tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid conversion tests
     REQUIRE(converter::utf32_to_utf16(U"Hello, world!") == u"Hello, world!");
@@ -112,7 +114,7 @@ TEST_CASE("UTF-32 to UTF-16 conversion tests", "[unicode]") {
 }
 
 TEST_CASE("UTF-8 to UTF-16 conversion tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid conversion tests
     REQUIRE(converter::utf8_to_utf16(u8"Hello, world!") == u"Hello, world!");
@@ -130,7 +132,7 @@ TEST_CASE("UTF-8 to UTF-16 conversion tests", "[unicode]") {
 }
 
 TEST_CASE("UTF-16 to UTF-8 conversion tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid conversion tests
     REQUIRE(converter::utf16_to_utf8(u"Hello, world!") == u8"Hello, world!");
@@ -150,7 +152,7 @@ TEST_CASE("UTF-16 to UTF-8 conversion tests", "[unicode]") {
 }
 
 TEST_CASE("UTF-8 to UTF-32 conversion tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid conversion tests
     REQUIRE(converter::utf8_to_utf32(u8"Hello, world!") == U"Hello, world!");
@@ -167,7 +169,7 @@ TEST_CASE("UTF-8 to UTF-32 conversion tests", "[unicode]") {
 }
 
 TEST_CASE("UTF-32 to UTF-8 conversion tests", "[unicode]") {
-    using namespace rapidutf;
+    using rapidutf::converter;
 
     // Valid conversion tests
     REQUIRE(converter::utf32_to_utf8(U"Hello, world!") == u8"Hello, world!");
@@ -182,3 +184,97 @@ TEST_CASE("UTF-32 to UTF-8 conversion tests", "[unicode]") {
     std::u32string invalid_utf32 = U"\x110000"; // Invalid code point
     REQUIRE_THROWS_AS(converter::utf32_to_utf8(invalid_utf32), std::runtime_error);
 }
+
+TEST_CASE("Edge case UTF-8 validation tests", "[unicode]") {
+    using rapidutf::converter;
+
+    REQUIRE(converter::is_valid_utf8("\xC2\x80")); // Smallest two-byte character
+    REQUIRE(converter::is_valid_utf8("\xDF\xBF")); // Largest two-byte character
+    REQUIRE(converter::is_valid_utf8("\xE0\xA0\x80")); // Smallest three-byte character
+    REQUIRE(converter::is_valid_utf8("\xEF\xBF\xBF")); // Largest three-byte character
+    REQUIRE(converter::is_valid_utf8("\xF0\x90\x80\x80")); // Smallest four-byte character
+    REQUIRE(converter::is_valid_utf8("\xF4\x8F\xBF\xBF")); // Largest valid four-byte character
+
+    REQUIRE(!converter::is_valid_utf8("\xF4\x90\x80\x80")); // Just above largest valid four-byte character
+    REQUIRE(!converter::is_valid_utf8("\xFE")); // Invalid start byte
+    REQUIRE(!converter::is_valid_utf8("\xFF")); // Invalid start byte
+    REQUIRE(!converter::is_valid_utf8("\xC0\xAF")); // Overlong encoding
+    REQUIRE(!converter::is_valid_utf8("\xE0\x80\xAF")); // Overlong encoding
+    REQUIRE(!converter::is_valid_utf8("\xF0\x80\x80\xAF")); // Overlong encoding
+}
+
+TEST_CASE("UTF-16 surrogate pair tests", "[unicode]") {
+    using rapidutf::converter;
+
+    std::u16string valid_surrogate_pair = u"\xD800\xDC00";
+    REQUIRE(converter::is_valid_utf16(valid_surrogate_pair));
+
+    std::u16string invalid_surrogate_order = u"\xDC00\xD800";
+    REQUIRE(!converter::is_valid_utf16(invalid_surrogate_order));
+
+}
+
+TEST_CASE("UTF-32 edge case tests", "[unicode]") {
+    using rapidutf::converter;
+
+    REQUIRE(converter::is_valid_utf32(U"\x0000")); // Null character
+    REQUIRE(converter::is_valid_utf32(U"\x0001")); // Start of valid range
+    REQUIRE(converter::is_valid_utf32(U"\xD7FF")); // Last code point before surrogate range
+    REQUIRE(converter::is_valid_utf32(U"\xE000")); // First code point after surrogate range
+    REQUIRE(converter::is_valid_utf32(U"\x10FFFF")); // Last valid code point
+
+    REQUIRE(!converter::is_valid_utf32(U"\xD800")); // Start of surrogate range
+    REQUIRE(!converter::is_valid_utf32(U"\xDFFF")); // End of surrogate range
+    REQUIRE(!converter::is_valid_utf32(U"\x110000")); // First invalid code point
+}
+
+TEST_CASE("Roundtrip conversion tests", "[unicode]") {
+    using rapidutf::converter;
+
+    std::string utf8 = u8"Hello, 世界! 🌍";
+    std::u16string utf16 = converter::utf8_to_utf16(utf8);
+    std::u32string utf32 = converter::utf16_to_utf32(utf16);
+
+    REQUIRE(converter::utf32_to_utf16(utf32) == utf16);
+    REQUIRE(converter::utf16_to_utf8(utf16) == utf8);
+    REQUIRE(converter::utf32_to_utf8(utf32) == utf8);
+}
+
+TEST_CASE("Empty string conversion tests", "[unicode]") {
+    using rapidutf::converter;
+
+    REQUIRE(converter::utf8_to_utf16("") == u"");
+    REQUIRE(converter::utf16_to_utf8(u"") == "");
+    REQUIRE(converter::utf8_to_utf32("") == U"");
+    REQUIRE(converter::utf32_to_utf8(U"") == "");
+    REQUIRE(converter::utf16_to_utf32(u"") == U"");
+    REQUIRE(converter::utf32_to_utf16(U"") == u"");
+}
+
+TEST_CASE("Mixed script conversion tests", "[unicode]") {
+    using rapidutf::converter;
+
+    std::string mixed_utf8 = u8"Hello, Здравствуй, こんにちは, 你好, مرحبا, שלום";
+    std::u16string mixed_utf16 = converter::utf8_to_utf16(mixed_utf8);
+    std::u32string mixed_utf32 = converter::utf8_to_utf32(mixed_utf8);
+
+    REQUIRE(converter::utf16_to_utf8(mixed_utf16) == mixed_utf8);
+    REQUIRE(converter::utf32_to_utf8(mixed_utf32) == mixed_utf8);
+}
+
+TEST_CASE("Long string conversion tests", "[unicode]") {
+    using rapidutf::converter;
+
+    std::string long_utf8;
+    for (int i = 0; i < 1000; ++i) {
+        long_utf8 += u8"🌍";
+    }
+
+    std::u16string long_utf16 = converter::utf8_to_utf16(long_utf8);
+    std::u32string long_utf32 = converter::utf8_to_utf32(long_utf8);
+
+    REQUIRE(converter::utf16_to_utf8(long_utf16) == long_utf8);
+    REQUIRE(converter::utf32_to_utf8(long_utf32) == long_utf8);
+}
+
+// NOLINTEND
