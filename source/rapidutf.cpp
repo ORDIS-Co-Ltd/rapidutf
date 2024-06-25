@@ -1601,8 +1601,6 @@ auto converter::utf8_to_utf16(const std::string &utf8) -> std::u16string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf8_to_utf16_avx2(utf8);
-#elif defined(RAPIDUTF_USE_SSE_4_2)
-  return utf8_to_utf16_sse42(utf8);
 #elif defined(RAPIDUTF_USE_NEON) && (0)
   return utf8_to_utf16_neon(utf8);
 #else
@@ -1614,8 +1612,6 @@ auto converter::utf16_to_utf8(const std::u16string &utf16) -> std::string
 {
 #if defined(RAPIDUTF_USE_AVX2) && 0
   return utf16_to_utf8_avx2(utf16);
-#elif defined(RAPIDUTF_USE_SSE_4_2)
-  return utf16_to_utf8_sse42(utf16);
 #elif defined(RAPIDUTF_USE_NEON) //&& (0)
   return utf16_to_utf8_neon(utf16);
 #else
@@ -1627,8 +1623,6 @@ auto converter::utf16_to_utf32(const std::u16string &utf16) -> std::u32string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf16_to_utf32_avx2(utf16);
-#elif defined(RAPIDUTF_USE_SSE_4_2)
-  return utf16_to_utf32_sse42(utf16);
 #elif defined(RAPIDUTF_USE_NEON)
   return utf16_to_utf32_neon(utf16);
 #else
@@ -1640,8 +1634,6 @@ auto converter::utf32_to_utf16(const std::u32string &utf32) -> std::u16string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf32_to_utf16_avx2(utf32);
-#elif defined(RAPIDUTF_USE_SSE_4_2)
-  return utf32_to_utf16_sse42(utf32);
 #elif defined(RAPIDUTF_USE_NEON)
   return utf32_to_utf16_neon(utf32);
 #else
@@ -1653,8 +1645,6 @@ auto converter::utf8_to_utf32(const std::string &utf8) -> std::u32string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf8_to_utf32_avx2(utf8);
-#elif defined(RAPIDUTF_USE_SSE_4_2)
-  return utf8_to_utf32_sse42(utf8);
 #elif defined(RAPIDUTF_USE_NEON)
   return utf8_to_utf32_neon(utf8);
 #else
@@ -1666,8 +1656,6 @@ auto converter::utf32_to_utf8(const std::u32string &utf32) -> std::string
 {
 #if defined(RAPIDUTF_USE_AVX2)
   return utf32_to_utf8_avx2(utf32);
-#elif defined(RAPIDUTF_USE_SSE_4_2)
-  return utf32_to_utf8_sse42(utf32);
 #elif defined(RAPIDUTF_USE_NEON) && (0)
   return utf32_to_utf8_neon(utf32);
 #else
