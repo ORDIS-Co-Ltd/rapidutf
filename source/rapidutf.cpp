@@ -1665,24 +1665,24 @@ auto converter::utf32_to_utf8(const std::u32string &utf32) -> std::string
 
 auto converter::utf8_to_wide(const std::string &utf8) -> std::wstring
 {
-#if defined(SOCI_WCHAR_T_IS_WIDE)  // Windows
+#if defined(RAPIDUTF_WCHAR_T_IS_WIDE)  // Windows
   // Convert UTF-8 to UTF-32 first and then to wstring (UTF-32 on Unix/Linux)
   std::u32string utf32 = utf8_to_utf32(utf8);
   return {utf32.begin(), utf32.end()};
 #else  // Unix/Linux and others
   std::u16string utf16 = utf8_to_utf16(utf8);
   return {utf16.begin(), utf16.end()};
-#endif  // SOCI_WCHAR_T_IS_WIDE
+#endif  // RAPIDUTF_WCHAR_T_IS_WIDE
 }
 
 auto converter::wide_to_utf8(const std::wstring &wide) -> std::string
 {
-#if defined(SOCI_WCHAR_T_IS_WIDE)  // Windows
+#if defined(RAPIDUTF_WCHAR_T_IS_WIDE)  // Windows
   // Convert wstring (UTF-32) to utf8
   return utf32_to_utf8({wide.begin(), wide.end()});
 #else  // Unix/Linux and others
   return utf16_to_utf8({wide.begin(), wide.end()});
-#endif  // SOCI_WCHAR_T_IS_WIDE
+#endif  // RAPIDUTF_WCHAR_T_IS_WIDE
 }
 
 }  // namespace rapidutf

@@ -8,7 +8,7 @@
 #include <cwchar>
 
 #if WCHAR_MAX > 0xFFFFu
-#  define SOCI_WCHAR_T_IS_WIDE
+#  define RAPIDUTF_WCHAR_T_IS_WIDE
 #endif
 
 
