@@ -262,6 +262,47 @@ TEST_CASE("Mixed script conversion tests", "[unicode]") {
     REQUIRE(converter::utf32_to_utf8(mixed_utf32) == mixed_utf8);
 }
 
+// TEST_CASE("Mixed script conversion tests (DEBUG)", "[unicode]") {
+//     using rapidutf::converter;
+
+//     std::string mixed_utf8 = u8"Hello, Здравствуй, こんにちは, 你好, مرحبا, שלום";
+//     std::u16string mixed_utf16 = converter::utf8_to_utf16(mixed_utf8);
+
+//     // Print character values of mixed_utf8
+//     std::cout << "mixed_utf8 character values:" << std::endl;
+//     for (char c : mixed_utf8) {
+//         std::cout << static_cast<int>(static_cast<unsigned char>(c)) << " ";
+//     }
+//     std::cout << std::endl;
+
+//     // Print character values of mixed_utf16
+//     std::cout << "mixed_utf16 character values:" << std::endl;
+//     for (char16_t c : mixed_utf16) {
+//         std::cout << static_cast<int>(c) << " ";
+//     }
+//     std::cout << std::endl;
+
+//     std::string new_utf8 = converter::utf16_to_utf8(mixed_utf16);
+
+//     // Print character values of new_utf8
+//     std::cout << "new_utf8 character values:" << std::endl;
+//     for (char c : new_utf8) {
+//         std::cout << static_cast<int>(static_cast<unsigned char>(c)) << " ";
+//     }
+//     std::cout << std::endl;
+
+//     // Compare lengths
+//     REQUIRE(new_utf8.length() == mixed_utf8.length());
+
+//     // Compare individual characters
+//     for (size_t i = 0; i < mixed_utf8.length(); ++i) {
+//         REQUIRE(new_utf8[i] == mixed_utf8[i]);
+//     }
+
+//     REQUIRE(new_utf8 == mixed_utf8);
+// }
+
+
 TEST_CASE("Long string conversion tests", "[unicode]") {
     using rapidutf::converter;
 

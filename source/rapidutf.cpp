@@ -1509,14 +1509,15 @@ auto converter::utf32_to_utf8_neon(const std::u32string &utf32) -> std::string
   return utf8;
 }
 
-#else
+// #else
+#endif
 
 auto converter::utf8_to_utf16_fallback(const std::string &utf8) -> std::u16string
 {
   std::u16string utf16;
   utf16.reserve(utf8.size());
 
-  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
+  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
   std::size_t length = utf8.length();
 
   utf8_to_utf16_scalar(bytes, length, utf16);
@@ -1568,7 +1569,7 @@ auto converter::utf8_to_utf32_fallback(const std::string &utf8) -> std::u32strin
   std::u32string utf32;
   utf32.reserve(utf8.size());
 
-  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data());
+  const unsigned char *bytes = reinterpret_cast<const unsigned char *>(utf8.data()); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
   std::size_t length = utf8.length();
 
   utf8_to_utf32_scalar(bytes, length, utf32);
@@ -1594,7 +1595,7 @@ auto converter::utf32_to_utf8_fallback(const std::u32string &utf32) -> std::stri
   return utf8;
 }
 
-#endif
+// #endif
 
 auto converter::utf8_to_utf16(const std::string &utf8) -> std::u16string
 {
@@ -1611,7 +1612,7 @@ auto converter::utf8_to_utf16(const std::string &utf8) -> std::u16string
 
 auto converter::utf16_to_utf8(const std::u16string &utf16) -> std::string
 {
-#if defined(RAPIDUTF_USE_AVX2)
+#if defined(RAPIDUTF_USE_AVX2) && 0
   return utf16_to_utf8_avx2(utf16);
 #elif defined(RAPIDUTF_USE_SSE_4_2)
   return utf16_to_utf8_sse42(utf16);

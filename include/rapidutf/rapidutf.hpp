@@ -58,14 +58,15 @@ private:
   static auto utf32_to_utf16_neon(const std::u32string &utf32) -> std::u16string;
   static auto utf8_to_utf32_neon(const std::string &utf8) -> std::u32string;
   static auto utf32_to_utf8_neon(const std::u32string &utf32) -> std::string;
-#else
+// #else
+#endif
   static auto utf8_to_utf16_fallback(const std::string &utf8) -> std::u16string;
   static auto utf16_to_utf8_fallback(const std::u16string &utf16) -> std::string;
   static auto utf16_to_utf32_fallback(const std::u16string &utf16) -> std::u32string;
   static auto utf32_to_utf16_fallback(const std::u32string &utf32) -> std::u16string;
   static auto utf8_to_utf32_fallback(const std::string &utf8) -> std::u32string;
   static auto utf32_to_utf8_fallback(const std::u32string &utf32) -> std::string;
-#endif
+// #endif
 };
 
 }  // namespace rapidutf
